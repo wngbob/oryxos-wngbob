@@ -44,6 +44,12 @@
         <!-- p3c-pmd 2.1.1 未适配 PMD 7,maven-pmd-plugin 锁最后一个内置 PMD 6.55.0 的 3.21.2 -->
         <maven-pmd-plugin.version>3.21.2</maven-pmd-plugin.version>
         <p3c.version>2.1.1</p3c.version>
+        <!-- 安全检查:SpotBugs + Find Security Bugs + OWASP Dependency-Check(源码层规则由 P3C 承载) -->
+        <spotbugs-maven-plugin.version>4.8.6.6</spotbugs-maven-plugin.version>
+        <findsecbugs.version>1.13.0</findsecbugs.version>
+        <dependency-check.version>12.1.0</dependency-check.version>
+        <!-- NVD API 限流严格,本地可用 -Ddependency-check.skip=true 跳过;CI 用 NVD_API_KEY 全量扫 -->
+        <dependency-check.skip>false</dependency-check.skip>
     </properties>
 
     <dependencyManagement>
@@ -256,6 +262,43 @@
                         </execution>
                     </executions>
                 </plugin>
+                <!-- 字节码安全扫描:SpotBugs + Find Security Bugs(覆盖 OWASP Top 10:
+                     SQL 注入、XSS、路径穿越、弱加密、XXE、不安全反序列化等) -->
+                <plugin>
+                    <groupId>com.github.spotbugs</groupId>
+                    <artifactId>spotbugs-maven-plugin</artifactId>
+                    <version>${spotbugs-maven-plugin.version}</version>
+                    <configuration>
+                        <effort>Max</effort>
+                        <threshold>Low</threshold>
+                        <plugins>
+                            <plugin>
+                                <groupId>com.h3xstream.findsecbugs</groupId>
+                                <artifactId>findsecbugs-plugin</artifactId>
+                                <version>${findsecbugs.version}</version>
+                            </plugin>
+                        </plugins>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>spotbugs-check</id>
+                            <phase>verify</phase>
+                            <goals>
+                                <goal>check</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <!-- 第三方依赖已知 CVE 扫描:CVSS ≥ 7 阻断;只在根模块聚合执行(inherited=false) -->
+                <plugin>
+                    <groupId>org.owasp</groupId>
+                    <artifactId>dependency-check-maven</artifactId>
+                    <version>${dependency-check.version}</version>
+                    <configuration>
+                        <failBuildOnCVSS>7</failBuildOnCVSS>
+                        <skip>${dependency-check.skip}</skip>
+                    </configuration>
+                </plugin>
             </plugins>
         </pluginManagement>
         <!-- 以下插件全模块继承生效,任一失败即阻断 mvn verify(章程质量门禁) -->
@@ -271,6 +314,25 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-checkstyle-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-maven-plugin</artifactId>
+            </plugin>
+            <!-- 依赖 CVE 扫描只在根模块聚合一次(逐模块跑会重复下载 NVD 数据) -->
+            <plugin>
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
+                <inherited>false</inherited>
+                <executions>
+                    <execution>
+                        <id>owasp-depcheck</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>aggregate</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

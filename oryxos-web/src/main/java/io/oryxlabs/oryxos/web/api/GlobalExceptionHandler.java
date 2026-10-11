@@ -30,7 +30,7 @@ public class GlobalExceptionHandler {
     IllegalArgumentException.class
   })
   public ResponseEntity<ApiResponse<Void>> badRequest(Exception ex) {
-    log.warn("bad request: {}", ex.getMessage());
+    log.warn("bad request: {}", sanitizeForLog(ex.getMessage()));
     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
         .body(ApiResponse.error(400, ex.getMessage()));
   }
@@ -48,5 +48,10 @@ public class GlobalExceptionHandler {
     log.error("internal error", ex);
     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
         .body(ApiResponse.error(500, "internal error"));
+  }
+
+  /** 异常消息可能携带攻击者可控输入(如原始 JSON),入日志前替换 CR/LF 防日志伪造。 */
+  private static String sanitizeForLog(String message) {
+    return message == null ? "" : message.replace('\r', '_').replace('\n', '_');
   }
 }
