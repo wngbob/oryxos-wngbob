@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: oryxos
+  # JDK 21 虚拟线程:同步阻塞执行模型下单机扛高并发(章程 VIII,不引入响应式)
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    # .oryxos/ 工作区由 oryxos init 创建;busy_timeout 防 SQLITE_BUSY,WAL 提升并发读,外键强制开启
+    url: jdbc:sqlite:.oryxos/oryxos.db?busy_timeout=5000&journal_mode=WAL&foreign_keys=true
+    driver-class-name: org.sqlite.JDBC
+    hikari:
+      # SQLite 单写者:连接池 = 1,防 SQLITE_BUSY
+      maximum-pool-size: 1
+  jpa:
+    # 表结构演进不依赖 ddl-auto:建表走手工脚本 oryxos-storage/src/main/resources/db/schema.sql
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        # SQLite 无版本化 Dialect,显式指定避免启动期连接探测元数据
+        dialect: org.hibernate.community.dialect.SQLiteDialect
+
+server:
+  port: 8080
+
+# 可观测:Actuator + Prometheus 指标(四设计目标之「可观测」)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: oryxos
+
+# OpenAPI 3.0:spec 在 /v3/api-docs,UI 暴露 /swagger-ui(与 contracts/rest-api.md 口径一致)
+springdoc:
+  swagger-ui:
+    path: /swagger-ui
