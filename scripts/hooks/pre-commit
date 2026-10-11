@@ -1,0 +1,37 @@
+#!/bin/sh
+# OryxOS pre-commit 钩子:提交前跑格式检查 + 快速安全扫描,任一失败即阻断提交。
+#
+# 启用方式(仓库根执行一次):
+#   git config core.hooksPath scripts/hooks
+#
+# 需要 JAVA_HOME 指向 JDK 21。未设置时,可在 scripts/hooks/local-env.sh
+# (已 gitignore,不入库)里写入本机路径,例如:
+#   export JAVA_HOME=/d/data/work/tools/jdk-21.0.12.1+1
+# 格式问题可用 ./mvnw spotless:apply 一键修复。
+
+set -e
+
+# 本机环境覆盖(JAVA_HOME 等),不入库
+if [ -f "$(dirname "$0")/local-env.sh" ]; then
+    . "$(dirname "$0")/local-env.sh"
+fi
+
+if [ -z "$JAVA_HOME" ]; then
+    echo "[pre-commit] JAVA_HOME 未设置,请 export JAVA_HOME 指向 JDK 21,"
+    echo "             或创建 scripts/hooks/local-env.sh 写入本机路径"
+    exit 1
+fi
+
+echo "[pre-commit] spotless:check ..."
+./mvnw -q spotless:check || {
+    echo "[pre-commit] 格式检查失败,请执行 ./mvnw spotless:apply 后重新暂存提交"
+    exit 1
+}
+
+echo "[pre-commit] spotbugs:check(快速安全扫描)..."
+./mvnw -q -DskipTests compile com.github.spotbugs:spotbugs-maven-plugin:check || {
+    echo "[pre-commit] SpotBugs 检查失败,请修复上述问题后重新提交"
+    exit 1
+}
+
+echo "[pre-commit] OK"

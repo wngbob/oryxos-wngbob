@@ -25,3 +25,6 @@ dist/
 # 日志与临时文件
 logs/
 *.log
+
+# pre-commit 钩子本机环境覆盖(JAVA_HOME 等,各机不同)
+scripts/hooks/local-env.sh
