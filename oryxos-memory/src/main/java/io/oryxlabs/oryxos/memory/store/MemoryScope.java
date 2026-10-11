@@ -7,9 +7,9 @@ package io.oryxlabs.oryxos.memory.store;
  */
 public enum MemoryScope {
 
-    /** 核心记忆区：永远全量注入、不截断、不参与检索。 */
-    CORE,
+  /** 核心记忆区：永远全量注入、不截断、不参与检索。 */
+  CORE,
 
-    /** 归档记忆区：可截断、可被关键词/语义检索命中（默认分区）。 */
-    ARCHIVAL
+  /** 归档记忆区：可截断、可被关键词/语义检索命中（默认分区）。 */
+  ARCHIVAL
 }

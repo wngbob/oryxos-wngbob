@@ -38,6 +38,12 @@
         <spring-ai-alibaba.version>1.1.2.3</spring-ai-alibaba.version>
         <logstash-logback-encoder.version>8.1</logstash-logback-encoder.version>
         <springdoc.version>2.9.1</springdoc.version>
+        <!-- 静态检查:格式(Spotless/google-java-format)+ 规约(P3C)+ 兜底(Checkstyle) -->
+        <spotless.version>2.44.5</spotless.version>
+        <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
+        <!-- p3c-pmd 2.1.1 未适配 PMD 7,maven-pmd-plugin 锁最后一个内置 PMD 6.55.0 的 3.21.2 -->
+        <maven-pmd-plugin.version>3.21.2</maven-pmd-plugin.version>
+        <p3c.version>2.1.1</p3c.version>
     </properties>
 
     <dependencyManagement>
@@ -167,7 +173,105 @@
                     <artifactId>spring-boot-maven-plugin</artifactId>
                     <version>${spring-boot.version}</version>
                 </plugin>
+                <!-- 格式层:Spotless + google-java-format(GOOGLE 风格),管「长什么样」,spotless:apply 一键自动修 -->
+                <plugin>
+                    <groupId>com.diffplug.spotless</groupId>
+                    <artifactId>spotless-maven-plugin</artifactId>
+                    <version>${spotless.version}</version>
+                    <configuration>
+                        <java>
+                            <googleJavaFormat>
+                                <style>GOOGLE</style>
+                            </googleJavaFormat>
+                            <removeUnusedImports/>
+                            <importOrder/>
+                        </java>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>spotless-check</id>
+                            <phase>verify</phase>
+                            <goals>
+                                <goal>check</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <!-- 编码规约层:阿里 P3C(挂在 PMD 上),管「怎么写才对」;个别风格规则与
+                     google-java-format 冲突时以 google-java-format 为准(它能自动修) -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-pmd-plugin</artifactId>
+                    <version>${maven-pmd-plugin.version}</version>
+                    <configuration>
+                        <rulesets>
+                            <!-- p3c-pmd jar 内无聚合 ruleset,逐一列出全量 10 个分类 -->
+                            <ruleset>rulesets/java/ali-comment.xml</ruleset>
+                            <ruleset>rulesets/java/ali-concurrent.xml</ruleset>
+                            <ruleset>rulesets/java/ali-constant.xml</ruleset>
+                            <ruleset>rulesets/java/ali-exception.xml</ruleset>
+                            <ruleset>rulesets/java/ali-flowcontrol.xml</ruleset>
+                            <ruleset>rulesets/java/ali-naming.xml</ruleset>
+                            <ruleset>rulesets/java/ali-oop.xml</ruleset>
+                            <ruleset>rulesets/java/ali-orm.xml</ruleset>
+                            <ruleset>rulesets/java/ali-other.xml</ruleset>
+                            <ruleset>rulesets/java/ali-set.xml</ruleset>
+                        </rulesets>
+                        <printFailingErrors>true</printFailingErrors>
+                    </configuration>
+                    <dependencies>
+                        <dependency>
+                            <groupId>com.alibaba.p3c</groupId>
+                            <artifactId>p3c-pmd</artifactId>
+                            <version>${p3c.version}</version>
+                        </dependency>
+                    </dependencies>
+                    <executions>
+                        <execution>
+                            <id>pmd-check</id>
+                            <phase>verify</phase>
+                            <goals>
+                                <goal>check</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <!-- 兜底:Checkstyle google_checks(内置 severity=warning,只报告不阻断) -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-checkstyle-plugin</artifactId>
+                    <version>${maven-checkstyle-plugin.version}</version>
+                    <configuration>
+                        <configLocation>google_checks.xml</configLocation>
+                        <consoleOutput>true</consoleOutput>
+                        <failsOnError>true</failsOnError>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>checkstyle-check</id>
+                            <phase>verify</phase>
+                            <goals>
+                                <goal>check</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
             </plugins>
         </pluginManagement>
+        <!-- 以下插件全模块继承生效,任一失败即阻断 mvn verify(章程质量门禁) -->
+        <plugins>
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-pmd-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+            </plugin>
+        </plugins>
     </build>
 </project>

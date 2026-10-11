@@ -7,15 +7,15 @@ package io.oryxlabs.oryxos.tool.sandbox;
  */
 public enum ActionType {
 
-    /** 读文件。 */
-    FILE_READ,
+  /** 读文件。 */
+  FILE_READ,
 
-    /** 写文件。 */
-    FILE_WRITE,
+  /** 写文件。 */
+  FILE_WRITE,
 
-    /** 执行 Shell 命令。 */
-    SHELL_COMMAND,
+  /** 执行 Shell 命令。 */
+  SHELL_COMMAND,
 
-    /** 发起 HTTP 请求。 */
-    HTTP_REQUEST
+  /** 发起 HTTP 请求。 */
+  HTTP_REQUEST
 }
