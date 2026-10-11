@@ -14,7 +14,7 @@
 ## 文档地图
 
 | 文档 | 回答 | 用途 |
-|------|------|------|
+| ------ | ------ | ------ |
 | `docs/IndustryResearch.md` | Why（业界格局、Java 缺位、定位） | 理解项目动机 |
 | `docs/DemandAnalysis.md` | What（五大核心能力、三档需求） | Spec-Kit `/speckit-specify` 的输入 |
 | `docs/TechnicalSolution.md` | How（技术栈、关键决策、模块） | Spec-Kit `/speckit-plan` 的输入 |
@@ -30,11 +30,12 @@
 
 - **阶段**：greenfield，设计文档已定稿，Maven 骨架已初始化；业务代码未开始，但已落第一层「契约接口 + 审计地基」（见本节「契约与审计地基」条目）
 - **已有**：`.specify/`（Spec-Kit v1.0.10 脚手架）、`.claude/skills/`（10 个 speckit-* skills，dash 风格命名）、docs/、`LICENSE`（Apache 2.0）、Maven 9 模块骨架（各模块暂为占位类，两个可运行入口：**`oryxos-boot` 的 `OryxosApplication` 是 fat JAR 主类**，`java -jar oryxos-boot/target/oryxos.jar` 启动 Spring Boot + Web 容器；**`oryxos-cli` 的 `OryxOsCli` 是 Picocli 主入口**，已由 maven-shade-plugin 打成可执行 fat JAR（内嵌 picocli），`java -jar oryxos-cli/target/oryxos-cli-0.1.0-SNAPSHOT.jar --version` 可直接运行）
+- **工程地基**（oryxos-init 已装，业务代码在其上生长）：Spring Boot **3.5.16**；`logback-spring.xml`（dev 彩色 console / prod JSON + traceId MDC）；Actuator + Prometheus（`/actuator/health|info|prometheus`）；`application.yaml`（虚拟线程开启、SQLite 定式 HikariCP pool=1 + busy_timeout + WAL）；`oryxos-web` 已有统一信封 `ApiResponse` + `GlobalExceptionHandler`（400/404/500，503/504 映射待 US-1/US-5）；springdoc UI 在 `/swagger-ui`；**静态检查门禁已接入 `mvn verify`**：Spotless（google-java-format，改代码后跑 `./mvnw spotless:apply`）+ 阿里 P3C（PMD 6.55）+ Checkstyle + SpotBugs/FindSecBugs + OWASP Dependency-Check（根模块聚合，本地可 `-Ddependency-check.skip=true`）；CI（`.github/workflows/ci.yml`）+ pre-commit（`scripts/hooks/`，本机已启用，JAVA_HOME 走 gitignore 的 `local-env.sh`）
 - **官网**：`website/`（VitePress 1.6，中英文双语 root=zh / en，自定义主题首页非默认模板；`base: '/oryxos/'` 对应 GitHub Pages 项目页 wngbob.github.io/oryxos；`.github/workflows/deploy-pages.yml` 在 `website/**` 变更推送 main 时自动构建部署（Pages Source 须设为 GitHub Actions）。若绑定独立域名 oryxos.wngbob.com：base 改为 `'/'` 并在 `website/public/` 放 CNAME 文件）
 - **契约与审计地基**（骨架期已落，均为接口/表结构，不含业务实现）：契约按「实现依赖契约、core 不反向依赖」放置——`oryxos-core` 定义 `OryxTool` / `ToolResult`；`oryxos-tool` 定义 `Sandbox` / `SandboxAction` / `ActionType` / `SandboxViolationException` / `NotifyChannelAdapter` / `NotifyTarget`；`oryxos-memory` 定义 `LongTermMemoryStore` / `MemoryScope` / `MemoryCapability`。审计表 `tool_invocations` / `llm_calls` 的实体 + Repository 在 `oryxos-storage`，建表脚本 `oryxos-storage/src/main/resources/db/schema.sql`（手工执行，`ddl-auto=none`，不走 Spring Boot 的 classpath `schema.sql` 自动执行）；`oryxos-boot` 因实体在兄弟包，必须显式 `@EntityScan` + `@EnableJpaRepositories`
 - **打包脚本**：`scripts/package.sh`（编译 → 打包 `dist/` → scp 上传远程；源码包排除所有 `target/`、`node_modules` 等本地产物，唯一上传的构建产物是脱离 target/ 的 `dist/oryxos.jar`；远程目标用 `REMOTE_HOST` / `REMOTE_DIR` 环境变量配置，未设置则跳过上传）
-- **待办**：constitution 重写为 v2.0.0（当前是脚手架默认版，OryxOS 原则未写入）→ `/speckit-specify` → `/speckit-plan` → 按 user story 实施
-- **环境**：JDK 21 + Maven 3.9.16 便携版在 `D:\data\work\tools\`（未入系统 PATH；构建前 `export JAVA_HOME=/d/data/work/tools/jdk-21.0.12.1+1`，仓库自带 `./mvnw`；国内构建用 `-s D:\data\work\tools\maven-settings-aliyun.xml` 走阿里云镜像）；已是 git 仓库（main 分支），remote `origin` = https://github.com/wngbob/oryxos（Public）；repo-local 配置：`http.proxy=http://127.0.0.1:7890`（本机直连 github.com 不通，走 Clash 代理）、`credential.helper=store`（本机 GCM 异常已旁路，PAT 明文存于 `~/.git-credentials`）；用 commit 标记每个 user story 完成
+- **待办**：constitution v2.0.0 与 `specs/001-runtime-kernel`（spec/plan/tasks + 五契约）已定稿并通过 `/speckit-analyze`；下一步 `/speckit-implement` 按 tasks.md 实施（T001/T002/T004/T006 已随 oryxos-init 工程地基完成并勾选，实际从 T003/T005/T007 起步）
+- **环境**：JDK 21 + Maven 3.9.16 便携版在 `D:\data\work\tools\`（未入系统 PATH；构建前 `export JAVA_HOME=/d/data/work/tools/jdk-21.0.12.1+1`，仓库自带 `./mvnw`；国内构建用 `-s D:\data\work\tools\maven-settings-aliyun.xml` 走阿里云镜像）；已是 git 仓库（main 分支），remote `origin` = <https://github.com/wngbob/oryxos>（Public）；repo-local 配置：`http.proxy=http://127.0.0.1:7890`（本机直连 github.com 不通，走 Clash 代理）、`credential.helper=store`（本机 GCM 异常已旁路，PAT 明文存于 `~/.git-credentials`）；用 commit 标记每个 user story 完成
 
 ## 技术栈
 
@@ -79,7 +80,7 @@ AI agent 生成的代码违反以下任何一条，都必须返工：
 核心阶段 10 个端点（`oryxos serve` 启动，默认端口 8080，virtual thread）：
 
 | 类别 | 端点 |
-|------|------|
+| ------ | ------ |
 | 会话管理 | `POST /api/v1/sessions`（创建）、`POST /api/v1/sessions/{id}/messages`（发消息）、`GET /api/v1/sessions/{id}`（查历史）、`DELETE /api/v1/sessions/{id}`（归档） |
 | Agent 调用 | `POST /api/v1/agents/{name}/invoke`（无状态调用） |
 | 信息查询 | `GET /api/v1/profiles`、`GET /api/v1/memory`、`GET /api/v1/tools` |
@@ -98,7 +99,7 @@ AI agent 生成的代码违反以下任何一条，都必须返工：
 核心阶段 12 个命令（Picocli 实现，`OryxOsCli` 为主入口）：
 
 | 类别 | 命令 |
-|------|------|
+| ------ | ------ |
 | 启动和状态 | `oryxos init`（初始化工作区，幂等）、`oryxos status`、`oryxos chat [--profile <name>]`、`oryxos serve`、`oryxos gateway` |
 | Profile 管理 | `oryxos profile list` / `create <name>` / `show <name>` / `delete <name>` |
 | 查询 | `oryxos provider list`、`oryxos tool list`、`oryxos session list` |
@@ -119,7 +120,7 @@ AI agent 生成的代码违反以下任何一条，都必须返工：
 五张表（`.oryxos/oryxos.db`，Spring Data JPA）：
 
 | 表 | 要点 |
-|----|------|
+| ---- | ------ |
 | `sessions` | `session_id` 主键（channel+user+profile 联合生成）、`profile_name`、`channel`、`user_id`、`messages_json`（JSON 序列化对话历史）、`status`（active/archived）、三个时间戳 |
 | `tool_invocations` | 每次 Tool 调用：tool_name、input_json、result_json、success、error_message、duration_ms |
 | `llm_calls` | 每次 LLM 调用：provider、model、prompt/completion/total tokens、duration_ms |
@@ -181,7 +182,7 @@ settings:
 ## 核心阶段 Maven 模块（9 个）
 
 | 模块 | 职责 |
-|------|------|
+| ------ | ------ |
 | `oryxos-core` | 核心抽象与引擎：`OryxTool`、`Session`、`Profile`、`AgentLoader`（deriveProfile）、`ContextLoader`、`ReActLoop`、`PromptBuilder`、`ToolExecutor`、`AgentService`、`AgentScheduler` |
 | `oryxos-provider` | 能力一：`ProviderService`、Function Calling 适配、provider name 显式映射 |
 | `oryxos-memory` | 能力三：`MemoryService` 三层门面、`LongTermMemory`、`MemoryTools`（save_memory / recall_memory） |
@@ -214,7 +215,7 @@ US-1 对接 LLM → US-2 ReAct 循环 → ┌─ US-3 Memory ────┐ →
 ## AI agent 最易跑偏的点（重点自查）
 
 | 错误写法 | 正确做法 |
-|---------|---------|
+| --------- | --------- |
 | 启用 Spring AI 自动 tool 执行 | 禁用，tool 调度归 `ToolExecutor`（原则 4） |
 | 按类型扫描 `ChatModel` Bean 区分 Provider | 显式 provider name 映射表（原则 10） |
 | 把 Tool 拆成 builtin/skill/mcp 多模块 | 合并为一个 `oryxos-tool`（原则 12） |

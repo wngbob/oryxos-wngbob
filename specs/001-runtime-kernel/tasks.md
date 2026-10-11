@@ -24,12 +24,12 @@ Maven 9 模块骨架、契约接口(`OryxTool`/`ToolResult`、`Sandbox`/`Sandbox
 
 **Purpose**: 版本对齐、静态检查门禁、运行时与存储基线——全部 story 的公共地基
 
-- [ ] T001 升级 Spring Boot 3.3.5 → **3.5.16**(pom.xml;Spring AI 1.1.8 依赖 Boot 3.5.x,E1):删除骨架显式 sqlite-jdbc 3.46.1.3(改由 BOM 托管 3.49.1.0)、hibernate-community-dialects 版本改为 `${hibernate.version}`(6.6.53.Final);`mvn clean package` 全绿
-- [ ] T002 静态检查五件套接入 `mvn verify`,任一失败即阻断(pom.xml + 各工具配置文件):Spotless(google-java-format,`spotless:check` 绑 verify)+ 阿里 P3C(p3c-pmd)+ Checkstyle + SpotBugs + findsecbugs-plugin + OWASP dependency-check-maven(D13)
-- [ ] T003 父 POM dependencyManagement 导入 `spring-ai-bom:1.1.8` + `spring-ai-alibaba-bom:1.1.2.3`(pom.xml);oryxos-provider/pom.xml 加 `spring-ai-starter-model-openai` + `spring-ai-alibaba-starter-dashscope`;oryxos-tool/pom.xml 加 `io.modelcontextprotocol.sdk:mcp`(版本跟 BOM = 0.18.3,**不显式覆盖**);oryxos-web/pom.xml 加 `springdoc-openapi-starter-webmvc-ui:2.9.1`
-- [ ] T004 [P] 配置 oryxos-boot/src/main/resources/application.yaml:`spring.threads.virtual.enabled=true`;SQLite 数据源 HikariCP `maximum-pool-size=1` + 连接串 `busy_timeout` + `journal_mode=WAL` + `foreign_keys=true`;`ddl-auto=none`(D10,防 `SQLITE_BUSY`)
+- [x] T001 升级 Spring Boot 3.3.5 → **3.5.16**(pom.xml;Spring AI 1.1.8 依赖 Boot 3.5.x,E1):删除骨架显式 sqlite-jdbc 3.46.1.3(改由 BOM 托管 3.49.1.0)、hibernate-community-dialects 版本改为 `${hibernate.version}`(6.6.53.Final);`mvn clean package` 全绿
+- [x] T002 静态检查五件套接入 `mvn verify`,任一失败即阻断(pom.xml + 各工具配置文件):Spotless(google-java-format,`spotless:check` 绑 verify)+ 阿里 P3C(p3c-pmd)+ Checkstyle + SpotBugs + findsecbugs-plugin + OWASP dependency-check-maven(D13)
+- [ ] T003(部分完成:BOM 与 springdoc 已随 oryxos-init 完成,Provider/MCP 模块依赖待 US-1/US-4)父 POM dependencyManagement 导入 `spring-ai-bom:1.1.8` + `spring-ai-alibaba-bom:1.1.2.3`(pom.xml);oryxos-provider/pom.xml 加 `spring-ai-starter-model-openai` + `spring-ai-alibaba-starter-dashscope`;oryxos-tool/pom.xml 加 `io.modelcontextprotocol.sdk:mcp`(版本跟 BOM = 0.18.3,**不显式覆盖**);oryxos-web/pom.xml 加 `springdoc-openapi-starter-webmvc-ui:2.9.1`
+- [x] T004 [P] 配置 oryxos-boot/src/main/resources/application.yaml:`spring.threads.virtual.enabled=true`;SQLite 数据源 HikariCP `maximum-pool-size=1` + 连接串 `busy_timeout` + `journal_mode=WAL` + `foreign_keys=true`;`ddl-auto=none`(D10,防 `SQLITE_BUSY`)
 - [ ] T005 [P] 扩展 oryxos-storage/src/main/resources/db/schema.sql 新增 4 表(data-model A1/A4/A5/A6 约束逐字):`sessions`(PK `session_id` = `channel:user:profile`,`status ∈ active/archived`)、`scheduled_tasks`(PK `schedule_id` 由 `(profile_name, schedule_key)` 生成且稳定,两列联合唯一,`enabled`/`retired` 状态机)、`task_executions`(关联 schedule_id 与 session_id,成败都记)、`notify_channels`(PK `name`,`type` 核心阶段仅 `webhook`)
-- [ ] T006 [P] 新增 oryxos-boot/src/main/resources/logback-spring.xml:结构化 JSON 日志,覆盖每次 LLM 调用与 Tool 调用;全项目禁用 `System.out`(章程可观测条款)
+- [x] T006 [P] 新增 oryxos-boot/src/main/resources/logback-spring.xml:结构化 JSON 日志,覆盖每次 LLM 调用与 Tool 调用;全项目禁用 `System.out`(章程可观测条款)
 
 **Checkpoint**: `mvn clean package` + `mvn verify` 全绿;虚拟线程与 SQLite 配置生效
 
