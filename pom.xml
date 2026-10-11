@@ -30,7 +30,12 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <spring-boot.version>3.5.16</spring-boot.version>
-        <!-- sqlite-jdbc 由 Spring Boot BOM 托管（3.5.16 → 3.49.1.0），不再显式声明 -->
+        <!-- CVE 修复版(2026-10-12):Boot 3.5.16 BOM 托管的 tomcat 10.1.55 / sqlite-jdbc
+             3.49.1.0 含多个 CVSS≥7 CVE,官方已在同发布线出修复版;版本号集中在此,
+             实际覆盖由 dependencyManagement 顶部、BOM import 之前的显式声明完成 -->
+        <tomcat.version>10.1.60</tomcat.version>
+        <sqlite-jdbc.version>3.53.4.0</sqlite-jdbc.version>
+        <log4j2.version>2.26.1</log4j2.version>
         <picocli.version>4.7.7</picocli.version>
         <!-- 与 Spring Boot 3.5.16 管理的 Hibernate 6.6.x 对齐（BOM 的 properties 不会随 import 继承，需显式声明） -->
         <hibernate.version>6.6.53.Final</hibernate.version>
@@ -54,6 +59,38 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- CVE 修复版覆盖(2026-10-12):BOM import 模式下 BOM 的 ${tomcat.version} 等属性
+                 在其自身模型内完成插值,本项目同名属性覆盖不生效,必须在 BOM 之前显式声明
+                 (dependencyManagement 声明在前者优先);Boot 升级吸纳这些版本后删除本组覆盖 -->
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-core</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-el</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-websocket</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.xerial</groupId>
+                <artifactId>sqlite-jdbc</artifactId>
+                <version>${sqlite-jdbc.version}</version>
+            </dependency>
+            <!-- log4j-api/log4j-to-slf4j 修复 CVE-2026-34478~34481(影响 ≤2.25.3,2.25.4 起修复);
+                 以 log4j-bom 统一版本,Boot 升级吸纳后删除 -->
+            <dependency>
+                <groupId>org.apache.logging.log4j</groupId>
+                <artifactId>log4j-bom</artifactId>
+                <version>${log4j2.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
@@ -297,6 +334,22 @@
                     <configuration>
                         <failBuildOnCVSS>7</failBuildOnCVSS>
                         <skip>${dependency-check.skip}</skip>
+                        <!-- 误报/不可达 CVE 抑制清单,每条附理由与移除条件,见文件头注释 -->
+                        <suppressionFiles>
+                            <suppressionFile>dependency-check-suppressions.xml</suppressionFile>
+                        </suppressionFiles>
+                        <!-- 禁用 RetireJS 前端库分析器:Maven 反应堆为纯 Java(唯一 JS 资产是
+                             swagger-ui webjar,版本由 springdoc 钉死);且其数据源
+                             raw.githubusercontent.com 国内网络不可达,启用会拖垮本地构建。
+                             website/ 前端依赖安全由 npm 生态(npm audit)另行负责 -->
+                        <retireJsAnalyzerEnabled>false</retireJsAnalyzerEnabled>
+                        <!-- 禁用 .NET Assembly 分析器:纯 Java 工程,仅 sqlite-jdbc 内嵌原生 DLL,
+                             本机无 dotnet 会报初始化错误噪音 -->
+                        <assemblyAnalyzerEnabled>false</assemblyAnalyzerEnabled>
+                        <!-- 禁用 Sonatype OSS Index 分析器:2025 起其 API 强制认证(401),
+                             未提供账号时会把构建打挂;CVE 主数据源 NVD 不受影响。
+                             后续若注册 Sonatype 账号,可配置 ossIndexServerId 后重新启用 -->
+                        <ossindexAnalyzerEnabled>false</ossindexAnalyzerEnabled>
                     </configuration>
                 </plugin>
             </plugins>
