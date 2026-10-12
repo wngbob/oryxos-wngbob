@@ -1,13 +1,13 @@
 import { defineConfig } from 'vitepress'
 
 // 部署说明：
-// - GitHub Pages 项目页（wngbob.github.io/oryxos）：base 保持 '/oryxos/'
+// - GitHub Pages 项目页（wngbob.github.io/oryxos-wngbob）：base 保持 '/oryxos-wngbob/'
 // - 若绑定独立域名 oryxos.wngbob.com（CNAME 指向 Pages）：base 必须改为 '/'，
 //   并在 website/public/ 下放置 CNAME 文件（内容：oryxos.wngbob.com）
 const sharedThemeConfig = {
   logo: '/images/logo-icon.svg',
   socialLinks: [
-    { icon: 'github', link: 'https://github.com/wngbob/oryxos' }
+    { icon: 'github', link: 'https://github.com/wngbob/oryxos-wngbob' }
   ],
   search: {
     provider: 'local'
@@ -51,7 +51,7 @@ const guideSidebarEn = [
 ]
 
 export default defineConfig({
-  base: '/oryxos/',
+  base: '/oryxos-wngbob/',
   title: 'OryxOS',
   description: '企业 Agent 操作系统（Agent Harness OS）—— 让每一家公司，都能用自然语言跑起来自己的 Agent',
   lang: 'zh-CN',

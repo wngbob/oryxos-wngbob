@@ -6,12 +6,14 @@
 
 **企业 Agent 操作系统（Agent Harness OS）—— 让每一家公司，都能用自然语言跑起来自己的 Agent。**
 
+> 📌 本仓库是上游开源项目 [oryx-labs/oryxos](https://github.com/oryx-labs/oryxos) 的**个人练习复刻**（跟随设计文档从零重建，用于学习与验证），非官方仓库。
+
 [![Language](https://img.shields.io/badge/language-Java%2021-orange.svg)](https://openjdk.org/)
 [![Framework](https://img.shields.io/badge/framework-Spring%20Boot%203.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-%E8%AE%BE%E8%AE%A1%E9%98%B6%E6%AE%B5-yellow.svg)](#项目状态)
 [![Community](https://img.shields.io/badge/community-oryx--labs-purple.svg)](docs/oryx-labs.md)
-[![Website](https://img.shields.io/badge/website-wngbob.github.io%2Foryxos-ff69b4.svg)](https://wngbob.github.io/oryxos/)
+[![Website](https://img.shields.io/badge/website-wngbob.github.io%2Foryxos--wngbob-ff69b4.svg)](https://wngbob.github.io/oryxos-wngbob/)
 
 ---
 
@@ -176,7 +178,7 @@ schedules: [{ cron: "0 0 8 * * *", message: "查一下今天天气并生成穿�
 
 | 文档 | 内容 |
 |------|------|
-| [官网](https://wngbob.github.io/oryxos/) | 项目官网（VitePress，中英文双语，源码在 `website/`） |
+| [官网](https://wngbob.github.io/oryxos-wngbob/) | 项目官网（VitePress，中英文双语，源码在 `website/`） |
 | [业界调研](docs/IndustryResearch.md) | Agent OS 是什么、业界格局、Java 生态缺位、OryxOS 定位 |
 | [需求文档](docs/DemandAnalysis.md) | 五大核心能力、三档需求、验收标准 |
 | [技术方案](docs/TechnicalSolution.md) | 技术栈、关键技术决策、模块结构、数据模型 |

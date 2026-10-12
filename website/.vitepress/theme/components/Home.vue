@@ -130,7 +130,7 @@ const zh = {
     tagline: '企业 Agent 操作系统（Agent Harness OS）',
     cols: [
       { title: '文档', links: [['什么是 OryxOS', '/guide/what-is-oryxos'], ['快速开始', '/guide/quick-start'], ['架构', '/guide/architecture'], ['路线图', '/guide/roadmap']] },
-      { title: '社区', links: [['GitHub', 'https://github.com/wngbob/oryxos'], ['oryx-labs', 'https://github.com/wngbob/oryxos']] }
+      { title: '社区', links: [['GitHub', 'https://github.com/wngbob/oryxos-wngbob'], ['oryx-labs', 'https://github.com/oryx-labs/oryxos']] }
     ],
     license: 'Released under the Apache License 2.0.',
     copyright: 'Copyright © 2026 oryx-labs'
@@ -257,7 +257,7 @@ const en = {
     tagline: 'Enterprise Agent Operating System (Agent Harness OS)',
     cols: [
       { title: 'Docs', links: [['What is OryxOS', '/guide/what-is-oryxos'], ['Quick Start', '/guide/quick-start'], ['Architecture', '/guide/architecture'], ['Roadmap', '/guide/roadmap']] },
-      { title: 'Community', links: [['GitHub', 'https://github.com/wngbob/oryxos'], ['oryx-labs', 'https://github.com/wngbob/oryxos']] }
+      { title: 'Community', links: [['GitHub', 'https://github.com/wngbob/oryxos-wngbob'], ['oryx-labs', 'https://github.com/oryx-labs/oryxos']] }
     ],
     license: 'Released under the Apache License 2.0.',
     copyright: 'Copyright © 2026 oryx-labs'
@@ -279,7 +279,7 @@ const en = {
           <p class="ox-hero-sub">{{ t.heroSub }}</p>
           <div class="ox-hero-cta">
             <a class="ox-btn ox-btn-primary" :href="L('/guide/quick-start')">{{ t.ctaStart }}</a>
-            <a class="ox-btn ox-btn-ghost" href="https://github.com/wngbob/oryxos" target="_blank" rel="noopener">{{ t.ctaGithub }} →</a>
+            <a class="ox-btn ox-btn-ghost" href="https://github.com/wngbob/oryxos-wngbob" target="_blank" rel="noopener">{{ t.ctaGithub }} →</a>
           </div>
         </div>
         <div class="ox-hero-visual">

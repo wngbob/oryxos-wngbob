@@ -43,4 +43,4 @@ OryxOS is incubated by the oryx-labs community — an AI-coding-driven AI explor
 - Incremental contributions (bug fixes, Plugin Tools, docs): edit the existing code and open a PR
 - Before contributing, read the "Inviolable Principles" section of `CLAUDE.md` at the repo root — code that violates the red lines must be reworked
 
-Join us on the [GitHub repository](https://github.com/wngbob/oryxos) via Issues and PRs.
+Join us on the [GitHub repository](https://github.com/wngbob/oryxos-wngbob) via Issues and PRs.

@@ -43,4 +43,4 @@ OryxOS 由 oryx-labs 社区孵化——一个 AI coding 驱动的 AI 探索社�
 - 增量贡献（修 bug、加 Plugin Tool、补文档）：直接在已有代码上改，提 PR 即可
 - 贡献前请先读仓库根目录 `CLAUDE.md` 的「不可违背的原则」一节——违反红线的代码必须返工
 
-到 [GitHub 仓库](https://github.com/wngbob/oryxos) 提 Issue 或 PR 参与共建。
+到 [GitHub 仓库](https://github.com/wngbob/oryxos-wngbob) 提 Issue 或 PR 参与共建。
