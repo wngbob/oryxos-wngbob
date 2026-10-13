@@ -23,6 +23,33 @@
             <groupId>org.yaml</groupId>
             <artifactId>snakeyaml</artifactId>
         </dependency>
+        <!--
+          ReActLoop 要构造 Prompt、读 ChatResponse，PromptBuilder 要产出 ToolCallback。
+          这是「依赖 Spring AI 的类型」，不是「依赖 oryxos-provider 模块」——依赖方向不受影响。
+          自动工具执行开关不在 core 侧设置，由 oryxos-provider 单点关闭。
+        -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-model</artifactId>
+        </dependency>
+        <!--
+          共享基础设施模块（000-runtime-kernel plan U4）：core 直接依赖它写 tool_invocations 审计。
+          storage 不反向依赖 core，故不成环。
+        -->
+        <dependency>
+            <groupId>io.oryxlabs</groupId>
+            <artifactId>oryxos-storage</artifactId>
+        </dependency>
+
+        <!--
+          @SuppressFBWarnings：只为豁免 SpotBugs 对「持有协作对象」的 EI_EXPOSE_REP2 误报（理由见父 pom）。
+          纯注解、provided 作用域，不进产物、不引入运行时依赖。
+        -->
+        <dependency>
+            <groupId>com.github.spotbugs</groupId>
+            <artifactId>spotbugs-annotations</artifactId>
+            <scope>provided</scope>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

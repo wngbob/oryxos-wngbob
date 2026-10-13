@@ -58,6 +58,14 @@
         <asm.version>9.7.1</asm.version>
         <!-- 安全检查:SpotBugs + Find Security Bugs + OWASP Dependency-Check(源码层规则由 P3C 承载) -->
         <spotbugs-maven-plugin.version>4.8.6.6</spotbugs-maven-plugin.version>
+        <!-- @SuppressFBWarnings 注解所在 jar（纯注解、provided 作用域，不进产物）。
+             为什么需要它：SpotBugs 对「方法较多、含循环」的类会放弃证明其不可变、回退判为「可变」，
+             于是「按依赖注入惯例持有协作对象」被误报为 EI_EXPOSE_REP2（实测 12 轮：逐字复制该类只留
+             字段+构造器即不报，加回 helper 方法即报；改 helper 形态、去掉可变参数、换常量类型均清不掉）。
+             用就地注解豁免，比在 excludeFilterFile 里开静默豁免口子更可审计——豁免点自带理由、跟着代码走。
+             版本对齐 spotbugs-maven-plugin 4.8.6.6 内嵌的 SpotBugs 核心版（4.8.6，注解 jar 不发 .6 后缀的
+             插件版号，4.8.6.6 在仓库里不存在）；注解语义随核心走，避免两处版本漂移。 -->
+        <spotbugs-annotations.version>4.8.6</spotbugs-annotations.version>
         <findsecbugs.version>1.13.0</findsecbugs.version>
         <dependency-check.version>12.1.0</dependency-check.version>
         <!-- NVD API 限流严格,本地可用 -Ddependency-check.skip=true 跳过;CI 用 NVD_API_KEY 全量扫 -->
@@ -92,6 +100,13 @@
                 <groupId>org.xerial</groupId>
                 <artifactId>sqlite-jdbc</artifactId>
                 <version>${sqlite-jdbc.version}</version>
+            </dependency>
+            <!-- 版本只在父 pom 一处声明，各模块引用时不重复写 -->
+            <dependency>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-annotations</artifactId>
+                <version>${spotbugs-annotations.version}</version>
+                <scope>provided</scope>
             </dependency>
             <!-- log4j-api/log4j-to-slf4j 修复 CVE-2026-34478~34481(影响 ≤2.25.3,2.25.4 起修复);
                  以 log4j-bom 统一版本,Boot 升级吸纳后删除 -->
