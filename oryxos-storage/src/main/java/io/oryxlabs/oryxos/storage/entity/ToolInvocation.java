@@ -65,7 +65,12 @@ public class ToolInvocation {
   @Column(name = "created_at")
   private LocalDateTime createdAt;
 
-  protected ToolInvocation() {
+  /**
+   * 无参构造。JPA 要求，同时供写入方（第 17 节的工具执行审计，在 {@code oryxos-core}）跨包构造后逐列 set。
+   *
+   * <p>与 {@link LlmCall} 保持同一可见性，免得两个审计实体一个能跨包 new、一个不能。
+   */
+  public ToolInvocation() {
     // JPA 要求的无参构造
   }
 

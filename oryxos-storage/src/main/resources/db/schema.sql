@@ -34,5 +34,7 @@ CREATE TABLE IF NOT EXISTS llm_calls (
     completion_tokens INTEGER,
     total_tokens      INTEGER,
     duration_ms       BIGINT,
+    success           BOOLEAN,
+    error_message     TEXT,
     created_at        TIMESTAMP
 );

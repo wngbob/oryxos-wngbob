@@ -18,5 +18,37 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
         </dependency>
+
+        <!-- 契约在 core、实现在能力模块：ProviderService 依赖 core 的 OryxTool 契约与 Profile -->
+        <dependency>
+            <groupId>io.oryxlabs</groupId>
+            <artifactId>oryxos-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- oryxos-storage 是共享基础设施模块（审计实体 + Repository） -->
+        <dependency>
+            <groupId>io.oryxlabs</groupId>
+            <artifactId>oryxos-storage</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Spring AI 只用一半：Provider 抽象 + 协议转换 + 工具 schema 生成。
+             刻意不引 spring-ai-starter-model-deepseek——其自动配置会产出按类型注入的
+             ChatModel Bean，与章程原则 III「provider name 显式映射、禁止类型扫描」冲突。
+             版本由根 pom 的 spring-ai-bom 托管，此处不写版本号。 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-model</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-deepseek</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>

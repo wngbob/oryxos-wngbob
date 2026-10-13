@@ -62,6 +62,10 @@
         <dependency-check.version>12.1.0</dependency-check.version>
         <!-- NVD API 限流严格,本地可用 -Ddependency-check.skip=true 跳过;CI 用 NVD_API_KEY 全量扫 -->
         <dependency-check.skip>false</dependency-check.skip>
+        <!-- 集成冒烟(真调外部 API)默认整组排除:不能让外部 API 的可用性变成自己流水线的可用性。
+             写成可覆盖的属性而非插件配置里的字面量——Maven 的 -D 覆盖不了 POM 里显式写死的插件参数,
+             只有先落成属性、再在插件里引用 ${},手动跑冒烟时 -DexcludedGroups=none 才真的生效 -->
+        <excludedGroups>integration</excludedGroups>
     </properties>
 
     <dependencyManagement>
@@ -207,10 +211,21 @@
                     <artifactId>maven-jar-plugin</artifactId>
                     <version>3.4.2</version>
                 </plugin>
+                <!-- 集成冒烟打 @Tag("integration"),默认整组排除(见 excludedGroups 属性)。
+                     手动跑冒烟: ./mvnw -pl oryxos-provider -am test -DexcludedGroups=none
+                                -Dtest=ProviderSmokeIT -Dsurefire.failIfNoSpecifiedTests=false
+                     三个参数缺一不可:
+                     ① -am 让兄弟模块走反应堆而非 ~/.m2 里的旧快照 jar——漏了它会取到放宽 LlmCall()
+                        可见性之前装进去的旧字节码,报 IllegalAccessError(本节实施期实测);
+                     ② IT 后缀不在 surefire 默认 includes 内,必须 -Dtest 点名;
+                     ③ 点名后 core/storage 里匹配不到测试,surefire 默认判失败,需 failIfNoSpecifiedTests=false -->
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.5.1</version>
+                    <configuration>
+                        <excludedGroups>${excludedGroups}</excludedGroups>
+                    </configuration>
                 </plugin>
                 <!-- oryxos-cli 打成可执行 fat JAR（内嵌 picocli），使 java -jar 可直接运行 -->
                 <plugin>

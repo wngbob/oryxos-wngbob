@@ -161,7 +161,10 @@ spring.threads.virtual.enabled: true   # JDK 21 虚拟线程，单机扛高并�
 
 ### 10. 验证
 - `mvn clean verify` 全绿
-- `mvn -pl oryxos-boot spring-boot:run` 起得来
+- `./mvnw -pl oryxos-boot -am package -DskipTests && java -jar oryxos-boot/target/oryxos.jar` 起得来
+  （**单模块命令一律带 `-am`**，否则兄弟模块从 `~/.m2` 取旧字节码。但**不要**写成
+  `mvn -pl oryxos-boot -am spring-boot:run`：`run` 是直接目标调用，`-am` 会让它在 `oryxos-parent`
+  上先执行一遍并报 `Unable to find a suitable main class`；`package` 是生命周期阶段，`-am` 才按预期逐模块构建）
 - 访问 `/actuator/health`（UP）、`/actuator/prometheus`（有指标）、`/swagger-ui.html`（能打开）
 - 故意写一行不规范代码 → `spotless:check` 报错；故意引一个有 CVE 的旧依赖 → depcheck 报警
 

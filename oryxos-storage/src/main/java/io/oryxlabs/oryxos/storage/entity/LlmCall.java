@@ -59,11 +59,25 @@ public class LlmCall {
   @Column(name = "duration_ms")
   private Long durationMs;
 
+  /** 是否成功。失败 MUST 显式为 {@code false}——只记成功不记失败，等于一次真实事故在系统里完全没留痕迹（章程原则 VI）。 */
+  @Column(name = "success")
+  private Boolean success;
+
+  /** 失败原因（异常消息）；成功时为空。 */
+  @Column(name = "error_message")
+  private String errorMessage;
+
   /** 调用时间。 */
   @Column(name = "created_at")
   private LocalDateTime createdAt;
 
-  protected LlmCall() {
+  /**
+   * 无参构造。JPA 要求，同时供写入方（{@code JpaLlmCallRecorder}，在 {@code oryxos-provider}）跨包构造后逐列 set。
+   *
+   * <p>刻意留空壳而不提供带参构造：审计记录的列由调用场景决定，逐列 set 让"哪一列来自哪里"在写入方一眼可见， 也避免实体反向依赖 Spring AI 的 {@code Usage}
+   * 类型（那是 Provider 模块才认识的东西）。
+   */
+  public LlmCall() {
     // JPA 要求的无参构造
   }
 
@@ -125,6 +139,22 @@ public class LlmCall {
 
   public void setDurationMs(Long durationMs) {
     this.durationMs = durationMs;
+  }
+
+  public Boolean getSuccess() {
+    return success;
+  }
+
+  public void setSuccess(Boolean success) {
+    this.success = success;
+  }
+
+  public String getErrorMessage() {
+    return errorMessage;
+  }
+
+  public void setErrorMessage(String errorMessage) {
+    this.errorMessage = errorMessage;
   }
 
   public LocalDateTime getCreatedAt() {

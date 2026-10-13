@@ -44,3 +44,12 @@ management:
 springdoc:
   swagger-ui:
     path: /swagger-ui
+
+# Provider 全局层:本实例连不连得上某家厂商、凭证从哪个环境变量读(契约 contracts/provider-config.md §2)
+# 与 Profile 层的分工:全局层管「连得上」,AGENT.md frontmatter 管「怎么用」;唯一耦合点是厂商名。
+# api-key MUST 为 ${ENV_VAR} 占位、禁止明文(章程 VIII/FR-010);环境变量缺失时启动失败并指明变量名。
+# 新增一家厂商:此处追加一项 + ProviderConfiguration 增加实现分支 + oryxos-provider/pom.xml 加模型依赖,Agent 侧零改动。
+oryxos:
+  providers:
+    - name: deepseek
+      api-key: ${DEEPSEEK_API_KEY}
