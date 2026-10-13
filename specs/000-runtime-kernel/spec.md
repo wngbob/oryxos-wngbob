@@ -1,6 +1,6 @@
 # Feature Specification: OryxOS 核心阶段 —— Agent OS 运行时内核
 
-**Feature Directory**: `specs/001-runtime-kernel`
+**Feature Directory**: `specs/000-runtime-kernel`
 
 **Created**: 2026-10-10
 

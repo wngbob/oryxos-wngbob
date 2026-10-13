@@ -1,8 +1,8 @@
 # Implementation Plan: OryxOS 核心阶段 —— Agent OS 运行时内核
 
-**Branch**: `001-runtime-kernel` | **Date**: 2026-10-10 | **Spec**: [spec.md](spec.md)
+**Branch**: `000-runtime-kernel` | **Date**: 2026-10-10 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `/specs/001-runtime-kernel/spec.md`;`docs/TechnicalSolution.md`(How)+ `docs/AiProgrammingGuide.md`(实施拆解)
+**Input**: Feature specification from `/specs/000-runtime-kernel/spec.md`;`docs/TechnicalSolution.md`(How)+ `docs/AiProgrammingGuide.md`(实施拆解)
 
 ## Summary
 
@@ -74,7 +74,7 @@
 ### Documentation (this feature)
 
 ```text
-specs/001-runtime-kernel/
+specs/000-runtime-kernel/
 ├── plan.md              # 本文件
 ├── research.md          # Phase 0:决策与外部核实
 ├── data-model.md        # Phase 1:6 表 + 文件 + 内存派生

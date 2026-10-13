@@ -1,6 +1,6 @@
 # Tasks: OryxOS 核心阶段 —— Agent OS 运行时内核
 
-**Input**: Design documents from `/specs/001-runtime-kernel/`
+**Input**: Design documents from `/specs/000-runtime-kernel/`
 
 **Prerequisites**: plan.md (required), spec.md (required), research.md, data-model.md, contracts/, quickstart.md
 
