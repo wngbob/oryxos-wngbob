@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  OryxOS 的阿里 P3C 规约入口（编码规约层，挂在 PMD 6.55 上；格式层是 Spotless/google-java-format）。
+
+  为什么需要这个文件：p3c-pmd 2.1.1 的 jar 内没有聚合 ruleset（只有一个分类一个 XML），
+  所以父 pom 原先直接列了全量 10 个分类。但列分类无法排除单条规则，而本项目要排除
+  ClassMustHaveAuthorRule（理由见下），故改为由本文件引用 10 个分类并做排除。
+
+  唯一的排除项：ClassMustHaveAuthorRule（类注释必须写 @author）
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  理由：git 已经是作者信息的事实源（git log / git blame 可精确到行、且不可伪造），
+  在每个类的 javadoc 里再维护一份 @author 是重复且会随重构腐坏的信息——文件被多人改过
+  之后 @author 反而误导。阿里官方后续口径也已淡化该条。核心阶段 27 个类若全量补 @author，
+  是纯噪音型合规。
+
+  影响面：仅此一条，其余 9 个分类的全部规则照常生效（P3C 的命名、并发、异常、集合、
+  OOP、日志、SQL 等规约一条不少）。
+
+  恢复条件：团队若决定保留 @author 标签，删除本文件里的 <exclude> 即可（无需改 pom）。
+  若将来排除项增多，需重新评估是否值得继续用 P3C。
+-->
+<ruleset name="oryxos-p3c"
+         xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 http://pmd.sourceforge.net/ruleset_2_0_0.xsd">
+
+    <description>OryxOS 采用的阿里 P3C 规约集（全量 10 个分类，排除 ClassMustHaveAuthorRule）</description>
+
+    <rule ref="rulesets/java/ali-comment.xml">
+        <exclude name="ClassMustHaveAuthorRule"/>
+    </rule>
+    <rule ref="rulesets/java/ali-concurrent.xml"/>
+    <rule ref="rulesets/java/ali-constant.xml"/>
+    <rule ref="rulesets/java/ali-exception.xml"/>
+    <rule ref="rulesets/java/ali-flowcontrol.xml"/>
+    <rule ref="rulesets/java/ali-naming.xml"/>
+    <rule ref="rulesets/java/ali-oop.xml"/>
+    <rule ref="rulesets/java/ali-orm.xml"/>
+    <rule ref="rulesets/java/ali-other.xml"/>
+    <rule ref="rulesets/java/ali-set.xml"/>
+</ruleset>

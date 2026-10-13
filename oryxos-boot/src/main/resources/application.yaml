@@ -16,6 +16,8 @@ spring:
     # 表结构演进不依赖 ddl-auto:建表走手工脚本 oryxos-storage/src/main/resources/db/schema.sql
     hibernate:
       ddl-auto: none
+    # 纯 REST 服务(无视图渲染层),关闭 open-in-view 防懒加载泄漏到视图层,同时消除启动 WARN
+    open-in-view: false
     properties:
       hibernate:
         # SQLite 无版本化 Dialect,显式指定避免启动期连接探测元数据

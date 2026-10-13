@@ -11,6 +11,11 @@ import org.springframework.data.jpa.repository.JpaRepository;
  */
 public interface ToolInvocationRepository extends JpaRepository<ToolInvocation, Long> {
 
-  /** 按 Session 查调用历史，按时间倒序。 */
+  /**
+   * 按 Session 查调用历史，按时间倒序。
+   *
+   * @param sessionId Session 标识
+   * @return 该 Session 的 Tool 调用记录，按创建时间倒序
+   */
   List<ToolInvocation> findBySessionIdOrderByCreatedAtDesc(String sessionId);
 }

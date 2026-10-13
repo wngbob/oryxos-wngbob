@@ -13,13 +13,25 @@ package io.oryxlabs.oryxos.core.tool;
  */
 public interface OryxTool {
 
-  /** Tool 名称（Profile 的 {@code tools} 字段按名引用）。 */
+  /**
+   * Tool 名称（Profile 的 {@code tools} 字段按名引用）。
+   *
+   * @return Tool 名称
+   */
   String getName();
 
-  /** 供 LLM 判断何时调用的自然语言描述。 */
+  /**
+   * 供 LLM 判断何时调用的自然语言描述。
+   *
+   * @return Tool 用途描述
+   */
   String getDescription();
 
-  /** 入参的 JSON Schema 文本（供 Function Calling 使用）。 */
+  /**
+   * 入参的 JSON Schema 文本（供 Function Calling 使用）。
+   *
+   * @return JSON Schema 文本
+   */
   String getInputSchema();
 
   /**
