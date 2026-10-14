@@ -2,7 +2,7 @@
 
 **Feature Directory**: `specs/004-notify-outbound`
 
-**Git Branch**: `004-lesson19-notify-outbound`
+**Git Branch**: `class-19`
 
 **Created**: 2026-10-14
 

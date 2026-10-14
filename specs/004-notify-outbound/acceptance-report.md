@@ -1,7 +1,7 @@
 # 第 19 节验收报告：Notify 出站推送
 
 **Feature**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md) | **Tasks**: [tasks.md](tasks.md) | **Quickstart**: [quickstart.md](quickstart.md)
-**Branch**: `004-lesson19-notify-outbound` | **日期**: 2026-10-14 | **任务完成度**: 19 / 19
+**Branch**: `class-19` | **日期**: 2026-10-14 | **任务完成度**: 19 / 19
 **结论**: ✅ 节级 DoD 六项全部满足；harness 已判卷，剩余人工项见 §4
 
 ---

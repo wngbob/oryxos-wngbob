@@ -55,7 +55,8 @@ $ARGUMENTS
    - `docs/TechnicalSolution.md` 对应章节（映射表见下）；
    - 前序各代码课课件的"本节交付物"小节。
 2. **依赖存在性检查**：对前序每节交付物清单里的核心类，在代码库里 grep/Glob 确认存在。任何缺失 → 停下报告"先做第 X 节"，不得跳节自造。
-3. **分支**：确认当前在该节的 feature 分支上（speckit-specify 的 before_specify hook 会建分支；若 hook 未配置，手动 `git checkout -b {NNN}-lesson{N}-<slug>`），不在 main/主干上直接开发。
+3. **分支**：确认当前在该节的 feature 分支上。**分支名统一为 `class-{N}`**（第 19 节 → `class-19`）——这是 16/17/18 节既成的事实约定，课件自身的资源命名（`images/class-16-1.svg`）也是这个形状。`.specify/extensions.yml` 未配置，`before_specify` hook 不建分支，须手动 `git checkout -b class-{N}`。不在 main/主干上直接开发。
+   - 注意：feature 目录名仍是 Spec-Kit 的 `specs/{NNN}-<slug>`（如 `specs/004-notify-outbound`），与分支名是两套命名，不要混。
 
 **技术方案章节映射表：**
 

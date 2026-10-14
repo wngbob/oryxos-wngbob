@@ -1,6 +1,6 @@
 # Implementation Plan: Notify 出站推送 —— 给 Agent 补上「结果主动送出去」的出口
 
-**Branch**: `004-lesson19-notify-outbound` | **Date**: 2026-10-14 | **Spec**: [spec.md](spec.md)
+**Branch**: `class-19` | **Date**: 2026-10-14 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `specs/004-notify-outbound/spec.md`（第 19 节课件：`docs/class/第19节：Notify 模块 原理解析、实现与代码讲解.md`）
 
