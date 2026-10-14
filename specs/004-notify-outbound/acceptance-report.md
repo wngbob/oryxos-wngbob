@@ -208,5 +208,5 @@ awk '/notify_channels/,/^\);/' oryxos-storage/src/main/resources/db/schema.sql |
 
 ## 8. 备注
 
-- ⚠️ `docs/class/`（2.3MB 课件目录）**未入库**——仓库是 Public，提交时不要 `git add docs/class/`。
+- ℹ️ `docs/class/`（2.3MB 课件目录）**已随仓库跟踪**——2026-10-14 由仓库所有者决定入库（本条原写「未入库，提交时不要 `git add`」，据此更正）。
 - 本轮**未 commit / 未 push / 未跑 `package.sh`**——同步时机由用户决定。

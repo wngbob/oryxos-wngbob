@@ -197,7 +197,7 @@ grep -rnE "CompletableFuture|Reactor|ExecutorService|ThreadPool" \
 
 ## 8. 备注
 
-- ⚠️ `docs/class/`（课件目录）**未入库**——仓库是 Public。
+- ℹ️ `docs/class/`（课件目录）**已随仓库跟踪**——2026-10-14 由仓库所有者决定入库（本条原写「未入库」，据此更正）。
 - 本报告为**回填**，写入时**未 commit / 未 push**。
 - 本节与课件的**唯一已知偏差**：无 `ToolInvocationRepositoryTest`（见 §3 末）。其余 5 个测试类逐一对号。
 - 第 18 节对本节的改动已完整列于 §0；其中对 3 个测试类的改动是**纯签名机械更新**，断言与用例名一行未动。

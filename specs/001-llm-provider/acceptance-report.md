@@ -190,6 +190,6 @@ DEEPSEEK_API_KEY=<你的 key> ./mvnw -o -pl oryxos-provider -am test -Dgroups=in
 
 ## 8. 备注
 
-- ⚠️ `docs/class/`（课件目录）**未入库**——仓库是 Public。
+- ℹ️ `docs/class/`（课件目录）**已随仓库跟踪**——2026-10-14 由仓库所有者决定入库（本条原写「未入库」，据此更正）。
 - 本报告为**回填**，写入时**未 commit / 未 push**。
 - 后续节对本节文件的改动已列于 §0；其中 `ProfileLoader.loadAllDetailed()` / `LoadResult` 与 `ProviderService implements LlmClient` 是第 18 节按报批裁决补的，**属增量、非破坏性**。

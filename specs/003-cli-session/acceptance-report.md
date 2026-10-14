@@ -274,7 +274,7 @@ timeout 20 java -jar oryxos-boot/target/oryxos.jar serve 2>&1 | grep -c "BeanDef
 
 ## 8. 备注
 
-- ⚠️ `docs/class/`（课件目录）**未入库**——仓库是 Public。
+- ℹ️ `docs/class/`（课件目录）**已随仓库跟踪**——2026-10-14 由仓库所有者决定入库（本条原写「未入库」，据此更正）。
 - 本报告为**回填**，写入时**未 commit / 未 push**。
 - **本节是 16~18 三节中唯一零漂移的一节**（`git diff --stat da37705..HEAD` 为空），故其证据强度最高——全部实测即当时快照。
 - **跨节挂账**：`OryxosApplication` 的去留归第 26 节；两个空接缝（`ToolCatalog` / `MemorySource`）让位归第 20 / 22 节。

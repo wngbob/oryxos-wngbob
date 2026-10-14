@@ -182,6 +182,6 @@ Maven 多模块，路径相对仓库根。本节涉及模块：`oryxos-tool`（�
 ## Notes
 
 - 全程**不自动 commit / push / 运行 `package.sh`**，同步时机由用户决定
-- **`docs/class/` 不入库**（2.3MB 课件目录，未 gitignore，仓库是 Public）
+- **`docs/class/` 已入库**（2.3MB 课件目录；2026-10-14 由仓库所有者决定随仓库跟踪，此前为不入库）
 - 反作弊：MUST NOT 删断言 / `@Disabled` / 放宽阈值让测试变绿；实现错修实现，认为测试错就停下报告；**未全绿不得宣称完成**
 - 每个 user story 完成打 git commit（commit message 末尾带 `Co-Authored-By: Claude Code <noreply@anthropic.com>`）
