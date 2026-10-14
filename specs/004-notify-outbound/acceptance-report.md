@@ -199,8 +199,21 @@ awk '/notify_channels/,/^\);/' oryxos-storage/src/main/resources/db/schema.sql |
 
 ## 7. 剩余人工项（harness 判不了，等人工过）
 
-1. **真实 webhook 端到端** —— 假 webhook 验的是协议，真 webhook 验的是配置。配好一个真实群 webhook 后，`notify` 真能把消息送进群。
+1. **真实 webhook 端到端** —— 假 webhook 验的是协议，真 webhook 验的是配置。
    - ⚠️ **本节做不到，属预期**：`notify_channels` 表**运行期恒为空**（本节只读，写入路径归第 26 节），且工具**进不了容器**（零装配，Bean 声明归第 24 节）。故此刻真跑 `notify` 必然报「未配置任何通知渠道」——这是设计状态，不是缺陷。**端到端真跑要等第 24 节接线 + 第 26 节写入路径。**
+   - ✅ **已人工实测（2026-10-14，真实飞书群机器人 webhook）**——结论**比原稿保守**。原稿写「配好一个真实群 webhook 后，`notify` 真能把消息送进群」，**只对通用 webhook 接收端（webhook.site / 自建端点）成立，对 IM 群机器人不成立**：
+     - **实测（含对照组，结论已证死）**：
+       | 报文 | 飞书响应 | 群里 |
+       |---|---|---|
+       | `{"content":"..."}`（适配器实际送的） | `HTTP 200` + `{"code":19002,"msg":"params error, msg_type need"}` | 无消息 |
+       | `{"msg_type":"text","content":{"text":"..."}}`（飞书正确方言） | `HTTP 200` + `{"code":0,"msg":"success"}` | 出现消息 |
+
+       地址、网络、key、机器人、群全部相同，**只有报文形状不同**——一失败一成功，故失败原因**就是报文形状**。且**两次都是 `HTTP 200`**：只看状态码的适配器对这两次投递会给出**完全相同**的判断「成功」。
+     - **出口侧已排除**：JVM 出口实测通（JDK `HttpClient` 直连外网 `HTTP 200`，无需任何代理系统属性），故失败与网络无关。另注同一轮里 `curl` 曾被 shell 的 `https_proxy` 环境变量挡住（`HTTP 000`）而 JVM 不受影响——curl 与 JVM 代理来源不同，两者不可互相替代。
+     - **根因**：IM 群机器人用 **HTTP 200 承载业务错误**（飞书 `code`、企微 `errcode`），而 `WebhookNotifyAdapter.send()` 走 `.retrieve().toBodilessEntity()`（`WebhookNotifyAdapter.java:69-75`）**只判 HTTP 状态码、不解析响应体** → 判成成功 → `NotifyTools.notify` 返回 `ToolResult.success("已推送")` → **Agent 以为发出去了，实际一条都没到**。失败信号藏在响应体里，通用的「2xx 即送达」口径看不见它。
+     - **实现没有错**：通用报文 + 「2xx 即送达」**正是 FR-003「核心阶段只提供一档通用 webhook 实现、不逐家对接专用 API」明确要求的边界**；课件验收标准里那条「5xx 上抛」也是真过的（MockWebServer 真返回 5xx）。错的只是**原稿对「真实群 webhook」的措辞**——它把通用接收端与 IM 群机器人混为一谈。
+     - **处置（软门禁 ③ 报批后定，2026-10-14）：记为已知边界，本节代码一行不改。** 备选 B（解析响应体识别 `errcode`/`code`）与 C（按 `NotifyTarget.channelType` 选报文方言）都会把「某一家方言」写进核心阶段，分别撞 FR-003 与 FR-001/FR-003，故不采纳。IM 群机器人方言适配作为**新增实现类**（如 `FeishuNotifyAdapter`）归扩展阶段，**`NotifyChannelAdapter` 接口与调用方零改动**——这正是「接口先行」预留的升级路径。挂账见 [tasks.md](tasks.md) Notes 与 `CLAUDE.md`「当前状态」。
+     - **完整实测过程与可复现命令**见 [manual-test-guide.md](manual-test-guide.md) §4。
 2. **接口中立性思维练习** —— 换成企业微信官方 SDK 的实现，`NotifyChannelAdapter.send(NotifyTarget, String)` 签名需要改吗？答案应是不需要。（`NotifyToolsTest.acceptsAnotherAdapterImplementationWithoutAnyChange` 已用替身实现做了可判定部分）
 3. **前两项已由 harness 覆盖**：渠道未配置报错、白名单先行、回归不破 —— `mvn test` 绿即打勾。
 

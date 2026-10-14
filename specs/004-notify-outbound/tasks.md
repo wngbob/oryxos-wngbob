@@ -183,5 +183,7 @@ Maven 多模块，路径相对仓库根。本节涉及模块：`oryxos-tool`（�
 
 - 全程**不自动 commit / push / 运行 `package.sh`**，同步时机由用户决定
 - **`docs/class/` 已入库**（2.3MB 课件目录；2026-10-14 由仓库所有者决定随仓库跟踪，此前为不入库）
+- **跨节挂账：IM 群机器人方言适配**（2026-10-14 人工实测发现）——通用 webhook 报文 `{"content":"..."}` 不被 IM 群机器人接受（实测飞书回 **`HTTP 200` + `code:19002` "msg_type need"**；企微同类失败走 `HTTP 200` + `errcode:40008`），而 `WebhookNotifyAdapter` 按 HTTP 状态判成功 → `NotifyTools.notify` **假报「已推送」**。本节按 FR-003 边界**记为已知边界、代码一行不改**；适配作为**新增实现类**归扩展阶段，`NotifyChannelAdapter` 接口与调用方零改动（软门禁 ③ 已报批）。实测证据与可复现命令见 [manual-test-guide.md](manual-test-guide.md) §4、[acceptance-report.md](acceptance-report.md) §7
+- **归第 20 节的改造点：`@ToolParam(required = false)`**（2026-10-14 反编译 Spring AI 1.1.8 核实）——`NotifyTools.notify` 的 `channel` 参数未带 `@ToolParam`，而 `JsonSchemaGenerator.isMethodParameterRequired` 对无注解参数**一律判 required**（常量 `PROPERTY_REQUIRED_BY_DEFAULT` = 1）→ 生成的 JSON Schema 把 `channel` 列进 `required`，FR-004「渠道名可选」在模型可见层不成立。运行期行为正确（空值 → 默认渠道，已有单测），故**第 19 节不改**——`@Tool` 此刻惰性，改了无从验证；第 20 节写 `ToolRegistry` 注册时补注解即可
 - 反作弊：MUST NOT 删断言 / `@Disabled` / 放宽阈值让测试变绿；实现错修实现，认为测试错就停下报告；**未全绿不得宣称完成**
 - 每个 user story 完成打 git commit（commit message 末尾带 `Co-Authored-By: Claude Code <noreply@anthropic.com>`）

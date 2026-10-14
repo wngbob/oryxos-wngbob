@@ -222,7 +222,7 @@ java -jar oryxos-boot/target/oryxos.jar --version   # 预期：正常打印版�
 
 | # | 人工项 | 为什么机器判不了 | 怎么做 |
 | --- | --- | --- | --- |
-| 5.1 | **真实 webhook 送达** | 需要企业真实的群机器人地址，且是**外呼**——单测纪律禁止访问外网 | 第 24 节接线后：注册表插一行（`name` / `type=webhook` / `url=<真地址>`），跑一次 `notify`，确认消息真的出现在群里。**本节的替代证据**：MockWebServer 已证明「POST 发出去了、body 里有 content、地址来自配置」——剩下没证的只有「对端认不认」 |
+| 5.1 | **真实 webhook 送达** | 需要企业真实的群机器人地址，且是**外呼**——单测纪律禁止访问外网 | 第 24 节接线后：注册表插一行（`name` / `type=webhook` / `url=<真地址>`），跑一次 `notify`。**⚠️ 已人工实测（2026-10-14）**：对**通用 webhook 接收端**（webhook.site / 自建端点）送达成立；对 **IM 群机器人不成立**——它们要 `msg_type`/`msgtype` 方言，收到通用报文回 `HTTP 200` + 业务错误码，而适配器按状态码判成功 → 假报「已推送」。已按 FR-003 边界记为已知边界，详见 [manual-test-guide.md](manual-test-guide.md) §4 与 [acceptance-report.md](acceptance-report.md) §7。**本节的替代证据**：MockWebServer 已证明「POST 发出去了、body 里有 content、地址来自配置」 |
 | 5.2 | **接口中立性思想实验** | 属设计判断，非可断言事实 | 读 [contracts/notify-outbound.md](contracts/notify-outbound.md) §1，自问：**若现在要加一个飞书专用渠道，要不要改 `NotifyChannelAdapter` 或 `NotifyTools`？** 正确答案是「都不用，只新增一个 `implements NotifyChannelAdapter` 的类 + 在注册表里配 `type`」。若你的答案是需要改接口，说明接口漏了某一档实现的细节 |
 | 5.3 | **前序节回归绿** | 机器可判（§4 的命令），但**要你确认这是全量而非抽样** | 跑 §4 的 `./mvnw -o clean verify`，确认是全量 |
 | 5.4 | **顺序不变量的可信度** | `InOrder` 断言已机器化，但「这条断言本身写对了没」要人看一眼 | 读 `NotifyToolsTest` 里那条 `@DisplayName("发送前必须先过白名单校验")`，确认用的是 `InOrder` 而非两条独立的 `verify`——**两条独立 `verify` 在顺序写反时也会通过**（[contracts/notify-outbound.md](contracts/notify-outbound.md) §3.3） |
