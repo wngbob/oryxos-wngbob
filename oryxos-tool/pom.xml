@@ -13,15 +13,80 @@
     <name>oryxos-tool</name>
     <description>能力四（Tool 工具体系，三合一）：内置 Tool（File/Shell/Http/Notify）、McpClientService、McpToolAdapter、ToolRegistry、Sandbox 接口 + WhitelistSandbox</description>
 
+    <!-- ⚠️ 这段不是冗余，删了构建会红，别清理。
+         spring-boot-dependencies 3.5.16 把 kotlin.version 钉在 1.9.25 并托管 kotlin-stdlib，
+         会把 okhttp-jvm 5.5.0 自己声明的 kotlin-stdlib 2.1.21 降级成 1.9.25——而本机仓库里
+         没有 1.9.25（只有 1.3.72/1.8.21/1.9.10/2.1.21/2.4.20），离线构建直接解析失败：
+         "Could not resolve dependencies ... kotlin-stdlib:jar:1.9.25"。
+         更要紧的是 okhttp-jvm 5.5.0 由 Kotlin 2.1 编译，配 1.9.25 stdlib 有运行期元数据不兼容
+         风险，2.1.21 才是它真正需要的版本。模块级 dependencyManagement 优先级高于继承来的
+         BOM，把本模块内的 kotlin-stdlib 一律钉回 2.1.21——只写直接依赖也能让它输掉仲裁，
+         但图里仍会保留一个 1.9.25 节点、每次构建都刷 "The POM ... is missing" 警告，
+         所以覆盖必须落在 dependencyManagement 这一层。 -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.jetbrains.kotlin</groupId>
+                <artifactId>kotlin-stdlib</artifactId>
+                <version>2.1.21</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <!-- 契约倒置：内置 Tool 实现 core 的 OryxTool 接口（core 不反向依赖 tool） -->
         <dependency>
             <groupId>io.oryxlabs</groupId>
             <artifactId>oryxos-core</artifactId>
         </dependency>
+
+        <!-- oryxos-storage 是共享基础设施模块：通知渠道注册表的持久化实现消费 NotifyChannelRepository。
+             方向与既有的 core -> storage 一致（上层能力消费持久化）；storage 不反向依赖 tool。 -->
+        <dependency>
+            <groupId>io.oryxlabs</groupId>
+            <artifactId>oryxos-storage</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Spring AI 只用一半：@Tool 注解的 schema 生成能力（自动 tool 执行在 core 侧被禁用）。
+             本节注解是惰性的——注册机制归第 20 节。 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-model</artifactId>
+        </dependency>
+
+        <!-- RestClient：通用 webhook 出站推送的 HTTP 出口（带连接 + 读取有界超时） -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-web</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- 本地假 webhook：mockwebserver3（okhttp 5）不拖 JUnit 4，只 implements Closeable。
+             版本无 BOM 托管，必须显式写。 -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>mockwebserver3</artifactId>
+            <version>5.5.0</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- mockwebserver3 -> okhttp-jvm 5.5.0 的运行时依赖；版本由上面的 dependencyManagement
+             钉在 2.1.21（不写死在这里，避免同一个版本字面量出现两处）。显式声明是为了让「用
+             mockwebserver3 就得配这个 Kotlin 版本」这件事在依赖清单里看得见。仅 test scope：
+             主代码是纯 Java，不引 Kotlin。 -->
+        <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-stdlib</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

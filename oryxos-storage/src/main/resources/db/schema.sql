@@ -57,3 +57,18 @@ CREATE TABLE IF NOT EXISTS sessions (
     last_active_at TIMESTAMP,
     archived_at    TIMESTAMP
 );
+
+-- 通知渠道全局注册表（第 19 节新建）
+-- 列名与语义逐字照 000-runtime-kernel/data-model.md A6，不新增列。
+-- 渠道是全局的，不属于任何 Agent——按注册名引用，webhook 地址不进对话内容。
+-- name 是人指定的注册名，是业务键，故不用 AUTOINCREMENT。
+-- url 含 token，属敏感串，MUST NOT 出现在对话 / 日志 / 报错 / 命令输出中。
+-- config_json 形状为「JSON 对象、值均为字符串」，解析与校验归消费方。
+-- 第 19 节只读——写入路径归第 26 节，故运行期本表恒为空是预期状态。
+CREATE TABLE IF NOT EXISTS notify_channels (
+    name        VARCHAR(128) PRIMARY KEY,
+    type        VARCHAR(32),
+    url         VARCHAR(1024),
+    config_json TEXT,
+    description VARCHAR(512)
+);
