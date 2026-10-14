@@ -75,6 +75,14 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!--
+                      发行入口显式声明为 CLI：本 fat JAR 就是 oryxos 命令行工具（唯一发行物）。
+                      显式写死而非靠 MainClassFinder 自动探测——JAR 内并存两个 @SpringBootApplication
+                      （OryxosApplication 与 oryxos-cli 的 CliApplication），探测会有歧义。
+                    -->
+                    <mainClass>io.oryxlabs.oryxos.cli.OryxOsCli</mainClass>
+                </configuration>
                 <executions>
                     <execution>
                         <goals>

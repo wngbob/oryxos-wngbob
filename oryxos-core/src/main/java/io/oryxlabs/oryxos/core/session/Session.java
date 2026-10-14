@@ -26,13 +26,17 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 public final class Session {
 
   private final String id;
+  private final String channel;
+  private final String userId;
   private final String profileName;
   private final List<SessionMessage> messages = new ArrayList<>();
   private final Instant createdAt;
   private Instant lastActiveAt;
 
-  private Session(String id, String profileName, Instant createdAt) {
+  private Session(String id, String channel, String userId, String profileName, Instant createdAt) {
     this.id = Objects.requireNonNull(id, "id");
+    this.channel = Objects.requireNonNull(channel, "channel");
+    this.userId = Objects.requireNonNull(userId, "userId");
     this.profileName = Objects.requireNonNull(profileName, "profileName");
     this.createdAt = Objects.requireNonNull(createdAt, "createdAt");
     this.lastActiveAt = createdAt;
@@ -41,13 +45,46 @@ public final class Session {
   /**
    * 新建一个会话。
    *
-   * @param id 会话标识。生成规则（{@code channel:user:profile} 三段联合）属第 18 节，本节由调用方传入
+   * @param id 会话标识；由 {@code SessionId.of(channel, userId, profileName)} 拼接（第 18 节）
+   * @param channel 接入渠道，如 {@code cli} / {@code api} / {@code scheduler}
+   * @param userId 用户标识；CLI 固定 {@code local}
    * @param profileName 所属 Agent 名；{@code AgentService} 靠它从 {@code ProfileRegistry} 取
    *     Profile（FR-009）
    * @return 空的会话
    */
-  public static Session create(String id, String profileName) {
-    return new Session(id, profileName, Instant.now());
+  public static Session create(String id, String channel, String userId, String profileName) {
+    return new Session(id, channel, userId, profileName, Instant.now());
+  }
+
+  /**
+   * 从库中恢复一个会话（第 18 节）。
+   *
+   * <p><b>为什么不复用三个 {@code append*} 方法重放历史</b>：它们是只追加的，且每一条都盖 {@code Instant.now()}
+   * 时间戳——重放会把每条历史消息的时间戳改成「现在」，读回来的历史时间全错。本方法直接接收已带时间戳的消息列表， <b>不改写任何时间戳</b>。
+   *
+   * <p><b>包级私有</b>：只有同在 {@code core.session} 包的 {@code JpaSessionService} 需要它，不新增对外概念。
+   *
+   * @param id 会话标识
+   * @param channel 接入渠道
+   * @param userId 用户标识
+   * @param profileName 所属 Agent 名
+   * @param messages 已带时间戳的历史消息，顺序即事实顺序
+   * @param createdAt 原创建时间
+   * @param lastActiveAt 原最后活跃时间
+   * @return 恢复出来的会话
+   */
+  static Session restore(
+      String id,
+      String channel,
+      String userId,
+      String profileName,
+      List<SessionMessage> messages,
+      Instant createdAt,
+      Instant lastActiveAt) {
+    Session session = new Session(id, channel, userId, profileName, createdAt);
+    session.messages.addAll(messages);
+    session.lastActiveAt = Objects.requireNonNull(lastActiveAt, "lastActiveAt");
+    return session;
   }
 
   /**
@@ -55,6 +92,20 @@ public final class Session {
    */
   public String id() {
     return id;
+  }
+
+  /**
+   * @return 接入渠道
+   */
+  public String channel() {
+    return channel;
+  }
+
+  /**
+   * @return 用户标识
+   */
+  public String userId() {
+    return userId;
   }
 
   /**

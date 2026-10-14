@@ -51,7 +51,7 @@ class ReActLoopTest {
     toolExecutor = mock(ToolExecutor.class);
     when(promptBuilder.build(any(), any())).thenReturn(new Prompt("本轮内容由替身提供"));
     loop = new ReActLoop(promptBuilder, llmClient, toolExecutor);
-    session = Session.create(SESSION_ID, "demo");
+    session = Session.create(SESSION_ID, "cli", "alice", "demo");
   }
 
   @Test

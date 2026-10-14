@@ -1,5 +1,6 @@
 package io.oryxlabs.oryxos.provider;
 
+import io.oryxlabs.oryxos.core.llm.LlmClient;
 import io.oryxlabs.oryxos.core.profile.Profile;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -25,7 +26,7 @@ import org.springframework.ai.model.tool.ToolCallingChatOptions;
  *
  * <p><b>同步阻塞</b>：不引入响应式编程、不返回异步句柄、不自建线程池（章程原则 I）。
  */
-public class ProviderService {
+public class ProviderService implements LlmClient {
 
   private static final Logger log = LoggerFactory.getLogger(ProviderService.class);
 
@@ -64,6 +65,7 @@ public class ProviderService {
    * @return 模型响应，原样返回——响应里可能带着模型"想调某个工具"的意图，但执行不在本模块
    * @throws ProviderNotFoundException Profile 点名的厂商不在显式映射表里
    */
+  @Override
   public ChatResponse chat(String sessionId, Profile profile, Prompt prompt) {
     Profile.ProviderSpec spec = profile.provider();
     String providerName = spec == null ? null : spec.name();

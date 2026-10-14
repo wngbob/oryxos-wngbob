@@ -47,7 +47,7 @@ class AgentServiceTest {
     sessionService = mock(SessionService.class);
     agentService = new AgentService(profileRegistry, reActLoop, sessionService);
     profile = profileOf("demo");
-    session = Session.create(SESSION_ID, "demo");
+    session = Session.create(SESSION_ID, "cli", "alice", "demo");
     when(profileRegistry.find("demo")).thenReturn(Optional.of(profile));
   }
 
@@ -107,7 +107,7 @@ class AgentServiceTest {
   @Test
   @DisplayName("Profile 查不到：抛 IllegalStateException，消息含 Agent 名")
   void unknownProfileThrowsNamingAgent() {
-    Session orphan = Session.create("cli:bob:ghost", "ghost");
+    Session orphan = Session.create("cli:bob:ghost", "cli", "bob", "ghost");
 
     IllegalStateException thrown =
         assertThrows(IllegalStateException.class, () -> agentService.process(orphan, "你好"));

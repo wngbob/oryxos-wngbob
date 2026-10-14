@@ -18,6 +18,55 @@
             <groupId>info.picocli</groupId>
             <artifactId>picocli</artifactId>
         </dependency>
+        <!--
+          重命令（chat / serve / gateway）要启动 Spring 上下文，故本模块需要 starter；
+          轻命令（init / status / profile * / provider list / tool list / session list）不走 Spring。
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+
+        <!--
+          六个能力模块：CliAssemblyConfiguration 显式装配它们，命令类从上下文取 Bean。
+          MUST NOT 加 oryxos-web —— 本节不起 Web 容器（仲裁 15）。
+        -->
+        <dependency>
+            <groupId>io.oryxlabs</groupId>
+            <artifactId>oryxos-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.oryxlabs</groupId>
+            <artifactId>oryxos-provider</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.oryxlabs</groupId>
+            <artifactId>oryxos-tool</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.oryxlabs</groupId>
+            <artifactId>oryxos-memory</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.oryxlabs</groupId>
+            <artifactId>oryxos-storage</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.oryxlabs</groupId>
+            <artifactId>oryxos-channel-cli</artifactId>
+        </dependency>
+
+        <!--
+          @SuppressFBWarnings：轻命令的原生 JDBC（WorkspaceDb）必然撞上 FindSecBugs 的 SQL_INJECTION_JDBC——
+          它的判据是「SQL 是否为编译期常量」，而建表脚本按 research D8 必须从 classpath 的 db/schema.sql 切出来，
+          天然非常量；换成 PreparedStatement 同样会被报。SQL 全部来自本仓自己的常量与本仓自己的脚本，无外部输入。
+          纯注解、provided 作用域，不进产物、不引入运行时依赖（与 oryxos-core 同一款、同一版本，父 pom 已管）。
+        -->
+        <dependency>
+            <groupId>com.github.spotbugs</groupId>
+            <artifactId>spotbugs-annotations</artifactId>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -28,28 +77,13 @@
                 <filtering>true</filtering>
             </resource>
         </resources>
-        <plugins>
-            <!-- 打成可执行 fat JAR：内嵌 picocli，写入 Main-Class，使 java -jar 直接可用 -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>shade</goal>
-                        </goals>
-                        <configuration>
-                            <createDependencyReducedPom>false</createDependencyReducedPom>
-                            <transformers>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>io.oryxlabs.oryxos.cli.OryxOsCli</mainClass>
-                                </transformer>
-                            </transformers>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
+        <!--
+          本节起本模块退回普通库模块：不再自打 fat JAR。
+          唯一发行物是 oryxos-boot 的 fat JAR（其 spring-boot-maven-plugin 显式声明 <mainClass> 指向
+          OryxOsCli）。理由：application.yaml 只在 oryxos-boot，重命令要读 spring.datasource.* 与
+          oryxos.providers，二者必须与 CLI 的类同 classpath；本模块若自打 fat JAR，那个 jar 的 classpath
+          上没有 application.yaml，重命令会在 DataSource 自动装配阶段失败（见 contracts/cli-assembly.md §1）。
+          MUST NOT 恢复 shade 插件、MUST NOT 在本模块放第二份 application.yaml。
+        -->
     </build>
 </project>

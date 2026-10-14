@@ -60,7 +60,7 @@ class PromptBuilderTest {
   @Test
   @DisplayName("四部分顺序与来源一一对应")
   void ordersFourPartsInFixedSequence() {
-    Session session = Session.create("s-1", "demo");
+    Session session = Session.create("cli:local:demo", "cli", "local", "demo");
     session.appendUserMessage("今天天气怎么样？");
     session.appendAssistantMessage("稍等，我查一下。", List.of());
 
@@ -86,7 +86,7 @@ class PromptBuilderTest {
   @DisplayName("长期记忆为空：整条不出现，不塞占位文本")
   void skipsMemoryPartWhenAbsent() {
     when(memorySource.longTermMemory(any())).thenReturn(Optional.empty());
-    Session session = Session.create("s-1", "demo");
+    Session session = Session.create("cli:local:demo", "cli", "local", "demo");
     session.appendUserMessage("今天天气怎么样？");
     session.appendAssistantMessage("稍等，我查一下。", List.of());
 
@@ -101,7 +101,7 @@ class PromptBuilderTest {
   @Test
   @DisplayName("system prompt 末尾附当前日期时间")
   void appendsCurrentDateTimeAtEndOfSystemPrompt() {
-    Session session = Session.create("s-1", "demo");
+    Session session = Session.create("cli:local:demo", "cli", "local", "demo");
     session.appendUserMessage("你是谁？");
 
     String systemPrompt = systemPromptOf(builder.build(session, profile));
@@ -130,7 +130,7 @@ class PromptBuilderTest {
   @Test
   @DisplayName("截断只切在用户消息边界：历史从不以工具消息开头")
   void neverStartsHistoryWithToolMessage() {
-    Session session = Session.create("s-1", "demo");
+    Session session = Session.create("cli:local:demo", "cli", "local", "demo");
     for (int i = 1; i <= 25; i++) {
       session.appendUserMessage("用户第 " + i + " 问");
       session.appendAssistantMessage(
@@ -181,7 +181,7 @@ class PromptBuilderTest {
   @Test
   @DisplayName("工具说明只翻译不执行：产物 call() 抛 UnsupportedOperationException")
   void toolCallbackThrowsOnCall() {
-    Session session = Session.create("s-1", "demo");
+    Session session = Session.create("cli:local:demo", "cli", "local", "demo");
     session.appendUserMessage("今天天气怎么样？");
 
     var callback = toolCallbacksOf(builder.build(session, profile)).get(0);
@@ -192,7 +192,7 @@ class PromptBuilderTest {
   @Test
   @DisplayName("工具消息的 name 由同段历史的 toolCalls 反查得到")
   void reversesToolNameFromHistory() {
-    Session session = Session.create("s-1", "demo");
+    Session session = Session.create("cli:local:demo", "cli", "local", "demo");
     session.appendUserMessage("今天天气怎么样？");
     session.appendAssistantMessage(
         "我查一下。", List.of(new AssistantMessage.ToolCall("call-1", "function", "http_get", "{}")));
@@ -208,7 +208,7 @@ class PromptBuilderTest {
   }
 
   private static Session sessionWithTurns(int turns) {
-    Session session = Session.create("s-1", "demo");
+    Session session = Session.create("cli:local:demo", "cli", "local", "demo");
     for (int i = 1; i <= turns; i++) {
       session.appendUserMessage("用户第 " + i + " 问");
       session.appendAssistantMessage("助手第 " + i + " 答", List.of());

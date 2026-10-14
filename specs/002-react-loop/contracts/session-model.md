@@ -24,9 +24,11 @@ public final class Session {
 
 | 消费方 | 它需要什么 | 本节已就位的部分 |
 | --- | --- | --- |
-| `SessionService` 的实现 | 把 `Session` 落进 `sessions` 表 | `id` / `profileName` / `messages` / `createdAt` / `lastActiveAt` 五个字段齐备 |
+| `SessionService` 的实现 | 把 `Session` 落进 `sessions` 表 | `id` / `channel` / `userId` / `profileName` / `messages` / `createdAt` / `lastActiveAt` **七个字段齐备** |
 | `messages_json` 序列化器 | 每条消息的 `{role, content, toolCalls?, toolCallId?, timestamp}` | `SessionMessage` 的五个字段与 A1 元素**逐字对齐**，序列化时不需要改这个类型 |
 | 会话恢复（第 25 节钟推、第 26 节 Web） | 从表里读回 `Session` 继续跑 | `Session.create(...)` + 三个 append 足以重建（本节的追加操作返回刚追加的消息，便于断言） |
+
+**第 18 节已修订本行**：上表原写「五个字段齐备」。会话标识由 `channel` / `user` / `profile` 三段联合生成（第 18 节 FR-006），表 `sessions` 也把 `channel` / `user_id` 单列存，故 `Session` 补齐 `channel` 与 `userId` 两字段，工厂方法由 `Session.create(id, profileName)` 变为 `Session.create(id, channel, userId, profileName)`。已报批（specs/003-cli-session/spec.md 冲突仲裁记录 2）。
 
 **序列化口径提醒**：`role` 落库为小写字符串（`system` / `user` / `assistant` / `tool`，对齐 A1）；`toolCalls` 的元素取 `AssistantMessage.ToolCall` 的 `id` / `type` / `name` / `arguments` 四个字段；`timestamp` 落 ISO-8601。
 

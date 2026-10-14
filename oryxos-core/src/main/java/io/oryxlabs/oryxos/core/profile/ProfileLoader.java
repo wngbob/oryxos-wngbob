@@ -85,9 +85,24 @@ public class ProfileLoader {
    * @return 装载成功的 Profile，按目录名升序；坏目录不出现在结果里，但一定在 ERROR 日志里
    */
   public List<Profile> loadAll() {
+    return loadAllDetailed().loaded();
+  }
+
+  /**
+   * 装载全部 Agent 的 Profile，<b>并带回每条失败的原因</b>（第 18 节新增，已报批）。
+   *
+   * <p><b>为什么需要它</b>：{@link #loadAll()} 把每条失败吞成 ERROR 日志、只返回装载成功的那些——日志给运维看， 命令拿不到。而 {@code profile
+   * list} / {@code profile show} 要把「无效」连同原因一起打给用户。
+   *
+   * <p><b>为什么不让 CLI 自己重写一套校验</b>：「什么叫有效」的真相源只有本类一处，重写即第二处真相。 本方法与 {@code loadAll()}
+   * 共用同一段扫描逻辑，两者对「有效」的判定必然一致。
+   *
+   * @return 成功清单 + 失败明细（Agent 名 + 原因），两者都按目录名升序
+   */
+  public LoadResult loadAllDetailed() {
     if (!Files.isDirectory(agentsDir)) {
       log.atWarn().addKeyValue("agentsDir", agentsDir).log("Agent 目录不存在，装载结果为空：" + agentsDir);
-      return List.of();
+      return new LoadResult(List.of(), List.of());
     }
     List<Path> agentDirs;
     try (Stream<Path> entries = Files.list(agentsDir)) {
@@ -96,12 +111,15 @@ public class ProfileLoader {
       throw new UncheckedIOException("无法列出 Agent 目录: " + agentsDir, e);
     }
     List<Profile> loaded = new ArrayList<>();
+    // 必须写全 LoadResult.Failure：嵌套类型的简单名不会进入外层类的方法作用域
+    List<LoadResult.Failure> failures = new ArrayList<>();
     for (Path agentDir : agentDirs) {
       // 用 relativize 而非 getFileName：后者签名上可空（根路径无文件名），此处取的必然是直接子项，相对化结果就是目录名
       String agentName = agentsDir.relativize(agentDir).toString();
       try {
         loaded.add(loadOne(agentDir, agentName));
       } catch (ProfileLoadException e) {
+        failures.add(new LoadResult.Failure(agentName, e.getMessage()));
         log.atError()
             .addKeyValue("agent", agentName)
             .addKeyValue("agentDir", agentDir)
@@ -109,7 +127,32 @@ public class ProfileLoader {
             .log("Agent '" + agentName + "' 装载失败，已跳过: " + e.getMessage());
       }
     }
-    return List.copyOf(loaded);
+    return new LoadResult(List.copyOf(loaded), List.copyOf(failures));
+  }
+
+  /**
+   * 一次装载的完整结果：成功的 Profile 与失败的明细。
+   *
+   * <p>两个清单互斥且按目录名升序——「全部 Agent」= {@code loaded} 与 {@code failures} 的并集。
+   *
+   * @param loaded 装载成功的 Profile
+   * @param failures 装载失败的明细；元素给出 Agent 名与原因
+   */
+  public record LoadResult(List<Profile> loaded, List<Failure> failures) {
+
+    /** 归一化：可空集合收敛为不可变空表，使调用方不必判空。 */
+    public LoadResult {
+      loaded = loaded == null ? List.of() : List.copyOf(loaded);
+      failures = failures == null ? List.of() : List.copyOf(failures);
+    }
+
+    /**
+     * 一个 Agent 装载失败的原因。
+     *
+     * @param agentName Agent 名（目录名）
+     * @param reason 失败原因，直接取自装载异常的 message——不加工、不重述
+     */
+    public record Failure(String agentName, String reason) {}
   }
 
   private Profile loadOne(Path agentDir, String agentName) {

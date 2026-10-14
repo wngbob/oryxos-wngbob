@@ -38,3 +38,22 @@ CREATE TABLE IF NOT EXISTS llm_calls (
     error_message     TEXT,
     created_at        TIMESTAMP
 );
+
+-- 会话表：对话历史的持久化形态（第 18 节新建）
+-- 列名与长度逐字照 000-runtime-kernel/data-model.md A1，不新增列、不改类型。
+-- session_id 由 channel:user:profile 三段拼接生成，不是自增，故不用 AUTOINCREMENT。
+-- messages_json 一列存整个历史，核心阶段不按条拆表。
+-- 注意：本文件里任何注释都 MUST NOT 含分号字符——init 与测试都是按分号切分脚本再逐条执行的，
+-- 注释里出现分号会切出一条「只有注释、没有语句」的碎片，驱动执行它之后底层句柄即失效，
+-- 下一条真语句直接报 "The prepared statement has been finalized"。
+CREATE TABLE IF NOT EXISTS sessions (
+    session_id     VARCHAR(128) PRIMARY KEY,
+    profile_name   VARCHAR(128),
+    channel        VARCHAR(32),
+    user_id        VARCHAR(128),
+    messages_json  TEXT,
+    status         VARCHAR(16),
+    created_at     TIMESTAMP,
+    last_active_at TIMESTAMP,
+    archived_at    TIMESTAMP
+);
