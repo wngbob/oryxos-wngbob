@@ -5,9 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.oryxlabs.oryxos.storage.entity.LlmCall;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -21,6 +19,7 @@ import java.util.Objects;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -43,20 +42,25 @@ class LlmCallRepositoryTest {
   /** 手工建表脚本，位于 main resources，测试期从 classpath 读取。 */
   private static final String SCHEMA_SCRIPT = "/db/schema.sql";
 
-  private static final Path DB_FILE = createDatabaseFile();
+  /**
+   * 临时库目录，由 JUnit 注入并**由 JUnit 删除**（静态字段 → 每个测试类一份，{@code @BeforeAll} 之前注入、 {@code @AfterAll}
+   * 之后递归删除）。
+   *
+   * <p><b>MUST NOT 换回 {@code Files.createTempDirectory}</b>：那样没人删，每跑一次 {@code mvn verify} 就往 {@code
+   * /tmp} 留一个目录（本类曾如此，累计 44 个）。也 <b>MUST NOT</b> 写成 {@code static final Path DB_FILE =
+   * tempDir.resolve(...)}——静态初始化器在 {@code @BeforeAll} <b>之前</b>执行，那时 {@code tempDir} 还是 null。
+   */
+  @TempDir static Path tempDir;
+
+  /** 库文件路径。惰性求值：{@code @DynamicPropertySource} 收的是方法引用，解析属性时才真正落盘。 */
+  private static Path dbFile() {
+    return tempDir.resolve("oryxos.db");
+  }
 
   @Autowired private LlmCallRepository repository;
 
-  private static Path createDatabaseFile() {
-    try {
-      return Files.createTempDirectory("oryxos-llm-call-it").resolve("oryxos.db");
-    } catch (IOException e) {
-      throw new UncheckedIOException("无法创建测试用 SQLite 库文件", e);
-    }
-  }
-
   private static String jdbcUrl() {
-    return "jdbc:sqlite:" + DB_FILE;
+    return "jdbc:sqlite:" + dbFile();
   }
 
   @DynamicPropertySource

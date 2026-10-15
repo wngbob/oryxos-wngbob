@@ -3,6 +3,10 @@ package io.oryxlabs.oryxos.cli;
 import io.oryxlabs.oryxos.cli.command.ChatCommand;
 import io.oryxlabs.oryxos.cli.command.GatewayCommand;
 import io.oryxlabs.oryxos.cli.command.InitCommand;
+import io.oryxlabs.oryxos.cli.command.NotifyChannelAddCommand;
+import io.oryxlabs.oryxos.cli.command.NotifyChannelCommand;
+import io.oryxlabs.oryxos.cli.command.NotifyChannelListCommand;
+import io.oryxlabs.oryxos.cli.command.NotifyChannelRemoveCommand;
 import io.oryxlabs.oryxos.cli.command.ProfileCommand;
 import io.oryxlabs.oryxos.cli.command.ProfileCreateCommand;
 import io.oryxlabs.oryxos.cli.command.ProfileDeleteCommand;
@@ -30,13 +34,15 @@ import picocli.CommandLine.Command;
 /**
  * OryxOS 命令行主入口（Picocli）。
  *
- * <p>无参数运行打印版本信息；{@code -V} / {@code --version} 打印版本号；{@code -h} / {@code --help} 打印用法与 全部子命令。12
- * 个子命令见 {@code specs/003-cli-session/contracts/cli-surface.md} §1。
+ * <p>无参数运行打印版本信息；{@code -V} / {@code --version} 打印版本号；{@code -h} / {@code --help} 打印用法与 全部子命令。15
+ * 个子命令见 {@code specs/003-cli-session/contracts/cli-surface.md} §1（2026-10-15 补强② 由 12 增至 15：新增
+ * {@code notify-channel add|list|remove}，三条都是轻命令）。
  *
- * <p><b>命令按轻重分流</b>（FR-003）：轻命令（{@code init} / {@code status} / {@code profile *} / {@code provider
- * list} / {@code session list}）不启动 Spring 上下文，直接走文件与 SQLite，秒回；重命令（{@code chat} / {@code serve} /
- * {@code gateway} / {@code tool list}）才启动 Spring 上下文。判断标准只有一条： 这条命令要不要调模型、跑引擎。{@code tool list} 自第
- * 20 节起归重——列出 MCP 工具必须连上 server（contracts/assembly.md §5.3）。
+ * <p><b>命令按轻重分流</b>（FR-003）：轻命令（{@code init} / {@code status} / {@code profile *} / {@code
+ * notify-channel *} / {@code provider list} / {@code session list}）不启动 Spring 上下文，直接走文件与 SQLite，
+ * 秒回；重命令（{@code chat} / {@code serve} / {@code gateway} / {@code tool list}）才启动 Spring
+ * 上下文。判断标准只有一条： 这条命令要不要调模型、跑引擎。{@code tool list} 自第 20 节起归重——列出 MCP 工具必须连上
+ * server（contracts/assembly.md §5.3）。
  *
  * <p><b>命令树在这里显式组装，不用 {@code @Command(subcommands = ...)}</b>：轻命令的构造函数要收 {@link Workspace}
  * （装配只此一处，命令类自己不去猜工作区在哪），而注解只能写类字面量、写不了实例。显式 {@code addSubcommand} 是 唯一既保留构造注入、又不引入反射工厂的写法。
@@ -92,6 +98,7 @@ public final class OryxOsCli implements Runnable {
     root.addSubcommand("serve", new ServeCommand());
     root.addSubcommand("gateway", new GatewayCommand());
     root.addSubcommand("profile", profileGroup(workspace));
+    root.addSubcommand("notify-channel", notifyChannelGroup(workspace));
     root.addSubcommand("provider", providerGroup(workspace));
     root.addSubcommand("tool", toolGroup());
     root.addSubcommand("session", sessionGroup(workspace));
@@ -107,6 +114,19 @@ public final class OryxOsCli implements Runnable {
         .addSubcommand("create", new ProfileCreateCommand(workspace))
         .addSubcommand("show", new ProfileShowCommand(workspace))
         .addSubcommand("delete", new ProfileDeleteCommand(workspace));
+  }
+
+  /**
+   * {@code notify-channel} 分组（2026-10-15 补强②）。
+   *
+   * <p><b>三条都是轻命令</b>：不调模型、不跑引擎，因此不启 Spring 上下文，直接走 {@code workspace/} 子包的原生 JDBC ——与 {@code
+   * profile *} 同款，故照常接 {@link Workspace}。
+   */
+  private static CommandLine notifyChannelGroup(Workspace workspace) {
+    return new CommandLine(new NotifyChannelCommand())
+        .addSubcommand("add", new NotifyChannelAddCommand(workspace))
+        .addSubcommand("list", new NotifyChannelListCommand(workspace))
+        .addSubcommand("remove", new NotifyChannelRemoveCommand(workspace));
   }
 
   private static CommandLine providerGroup(Workspace workspace) {

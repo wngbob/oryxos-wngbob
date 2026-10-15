@@ -385,6 +385,10 @@ NotifyTarget = { channelType: String, config: Map<String, String> }
 
 `channel` 参数是通知渠道的全局注册名。通知渠道通过 Web 管理台或 `/api/v1/notify-channels` 做 CRUD，持久化在 SQLite 的 `notify_channels` 表；每项包含 `name`、`type`、`url` 和可选的 `description`，以及承载类型相关多字段的 `config`（webhook/feishu 等 HTTP 类继续用 `url`，email 用 `config` 的 host/port/from/to 等）。Agent 在 `AGENT.md` 正文中用自然语言按名引用渠道，LLM 调用时传 `channel` 和 `content`，`NotifyTools` 再从注册表解析适配器和 URL。具体 webhook 地址不进入对话，增加或修改渠道也无需改 Agent；`AGENT.md` frontmatter 不包含 `notify_channels` 字段。
 
+> **补注（2026-10-15，实现回填）**：上面「通过 Web 管理台或 `/api/v1/notify-channels` 做 CRUD」是**设计目标**，实现进度**落后于本文**——第 19 节只交付了读半边（表 + 按名解析 + `notify` 推送），Web 管理台与 REST CRUD 仍归第 26 节，且第 26 节的 10 个端点里**没有一个**碰 notify-channels。为让 `notify` 不是死能力，2026-10-15 补了一个**最小写入面**：CLI 三条轻命令 `oryxos notify-channel add|list|remove`（原生 JDBC，**不启 Spring**，故不经过 REST）。另两点实现口径细化本文：① `${ENV_VAR}` 占位是**读时解析**——库里存字面量 `${FEISHU_HOOK_URL}`，凭证永不落库（本文只说了「具体 webhook 地址不进入对话」，未说落库形态）；② `type` 的取值由**装配处的映射表**决定（当前 `webhook` / `feishu` / `lark` / `wecom`），数据库层不做约束，取值未知或拼错时在**路由处**报错并列出已知类型、一次请求都不发。
+>
+> **再补注（2026-10-15 晚，方言档回填）**：本文 376 行原写「核心阶段不用逐家接它们的专用 API」——这句对**专用 API**（签名算法、AccessToken 刷新）仍然成立，但对**群机器人 webhook** 已不成立：IM 群机器人**用 HTTP 200 承载业务错误**（报文写错时飞书回 `HTTP 200` + `code:19002`、企微回 `HTTP 200` + `errcode:40008`，群里一条消息都没有），而通用档只判 HTTP 状态码 → `notify` **假报「已推送」**。故已补两档**方言档**：`FeishuNotifyAdapter`（飞书 + Lark）与 `WeComNotifyAdapter`（企业微信，`type=wecom`）——**读响应体按业务码 fail-closed 判成败**，把「假成功」变回可落审计的失败；`RoutingNotifyChannelAdapter` 按 `type` 分派。**钉钉尚未做**（报文与企微完全相同，差异只在业务码语义与加签）。接口与调用方零改动。
+
 ![NotifyTools 设计：接口先行，核心阶段只实现 WebhookNotifyAdapter，扩展阶段新增专用渠道 Adapter](../website/public/images/docs-notify.svg)
 
 **跟已有机制的关系：**
@@ -558,6 +562,8 @@ session list
 ```
 
 每个子命令一个 `@Command` 类。不需要 Spring 上下文的命令（`init`、`profile list`）直接走文件操作启动快；需要 LLM 调用的命令（`chat`、`serve`、`gateway`）启动 Spring 上下文。
+
+> **补注（2026-10-15，实现回填）**：命令数已从 12 扩到 **15**——新增 `notify-channel add <name>` / `list` / `remove <name>`（通知渠道的最小写入面，见 6.8 补注）。这三条属**轻命令**（判据同上：不调模型、不跑引擎），走原生 JDBC 经 `WorkspaceDb`，与 `profile list` / `session list` 同类。既有 12 条的命令名 / 参数 / 退出码**一字未动**，本次是**命令集扩充**。另：`tool list` 自第 20 节起**由轻转重**——列出 MCP 工具必须连上 server，清单只有连上才知道，这已经是「跑引擎」（代价：有 MCP server 声明时最多等 `10 秒 × server 数`）。
 
 ### 8.8 配置与密钥加载
 
@@ -830,7 +836,7 @@ mvn clean package
 
 - 多 Agent 演示（两个不同 Profile 的 Agent 在同一实例并存）
 - Session 持久化到 SQLite（含 `tool_invocations`、`llm_calls` 写入）
-- `ContextLoader` 的 Bootstrap 加载、Picocli 12 个命令完整、结构化日志
+- `ContextLoader` 的 Bootstrap 加载、Picocli 12 个命令完整、结构化日志（**补注 2026-10-15**：命令数现为 **15**，见 8.7 补注）
 - `AgentScheduler` 第三触发源（`ThreadPoolTaskScheduler` + `CronTrigger`，Profile `schedules` 字段驱动）
 - 项目主页（VitePress 或类似）
 

@@ -20,7 +20,7 @@
 
 ## 1. 发行入口：`oryxos-boot` 的 fat JAR 就是 CLI
 
-**唯一发行物 = `oryxos-boot/target/oryxos.jar`**，`java -jar oryxos-boot/target/oryxos.jar <command>` 支持全部 12 条命令。
+**唯一发行物 = `oryxos-boot/target/oryxos.jar`**，`java -jar oryxos-boot/target/oryxos.jar <command>` 支持全部 **15** 条命令（2026-10-15 由 12 扩为 15，见 [cli-surface.md](cli-surface.md) 文件头修订记录）。
 
 | 落地项 | 内容 |
 | --- | --- |
@@ -35,6 +35,8 @@
 
 **已定字面量的细化（已报批）**：上游 `specs/000-runtime-kernel/contracts/cli.md` 第 3 行的 `java -jar oryxos-cli-*.jar <command>` 中的 **jar 名**被细化为 `oryxos-boot/target/oryxos.jar`；**12 条命令面逐字不变**。该骨架契约文件**不修改**——supersession 记在 spec 冲突仲裁记录 17。
 
+> **2026-10-15 补注**：上段的「12 条」指**本节交付时**的命令面；第 19 节交付后补强② 新增 `notify-channel add|list|remove` 三条轻命令，现为 **15** 条。jar 名与主类**均未变**——本次扩充只往 `OryxOsCli.buildCommandLine()` 的命令树里多挂一个分组，发行入口零改动。
+
 **连带影响（同一节内完成）**：`CLAUDE.md` 中「`oryxos-cli` 的 `OryxOsCli` 已由 maven-shade-plugin 打成可执行 fat JAR，`java -jar oryxos-cli/target/oryxos-cli-0.1.0-SNAPSHOT.jar --version` 可直接运行」一句改为 `java -jar oryxos-boot/target/oryxos.jar --version`。
 
 **MUST NOT**：
@@ -46,7 +48,7 @@
 ```bash
 grep -c "maven-shade-plugin" oryxos-cli/pom.xml        # 期望 0
 grep -n "mainClass" oryxos-boot/pom.xml                # 期望 1 行,值为 io.oryxlabs.oryxos.cli.OryxOsCli
-java -jar oryxos-boot/target/oryxos.jar --help          # 期望列出 12 条命令
+java -jar oryxos-boot/target/oryxos.jar --help          # 期望列出 15 条命令（2026-10-15 补强② 后）
 ```
 
 ---
@@ -146,7 +148,8 @@ public class CliApplication {}
 | 引擎 | `AgentService` 及其依赖 | 第 17 节交付，本节首次真正装配 |
 | 空接缝 ×2 | `ToolCatalog` / `MemorySource` | §3 |
 
-**装配只此一处**：12 个命令类**MUST NOT** 自己 `new` 服务——它们从上下文取 Bean，或（轻命令）只用 `workspace/` 子包里的文件 / JDBC 辅助类。
+**装配只此一处**：**15** 个命令类**MUST NOT** 自己 `new` 服务——它们从上下文取 Bean，或（轻命令）只用 `workspace/` 子包里的文件 / JDBC 辅助类。
+（2026-10-15 补强②：命令类由 12 增为 15；新增的三条 `notify-channel` 属轻命令，走 `workspace/WorkspaceDb` 的原生 JDBC，**不进 Spring 上下文**。）
 
 **`JpaSessionService` 不加 `@Component`**：它由 `CliAssemblyConfiguration` 以 `@Bean` 声明。理由：core 的类型不带 Spring 装配注解，「谁装配、装配成什么」只在装配类一处可见；也避免与第 26 节的装配点形成第二处真相（第 26 节需要时**复用同一个 `@Bean` 方法或把它提到共享配置**，不得复制一份）。
 

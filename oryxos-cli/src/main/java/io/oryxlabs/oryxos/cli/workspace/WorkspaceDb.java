@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -19,8 +20,9 @@ import java.util.List;
  * <p><b>为什么不用 Spring 的 DataSource</b>：轻命令不启动 Spring 上下文（FR-003，启动一次 2~4 秒与「秒回」直接冲突），
  * 而它们要读库，所以必须有一条不依赖 Spring 的读库路径。用 {@code DriverManager} 直连是唯一不引入框架对象的选择。
  *
- * <p><b>收口什么、不收口什么</b>：连接、建表脚本执行、语句执行与异常包装收在这里——这三件事每个命令各写一遍必然 抄错一处；<b>SQL
- * 与行形状留在各命令</b>，因为「这个命令要哪几列」只有那个命令知道。所以 {@link #query} 收的是 {@code SQL + 行映射器}，而不是一堆以命令命名的专用方法。
+ * <p><b>收口什么、不收口什么</b>：连接、建表脚本执行、语句执行与异常包装收在这里——这几件事每个命令各写一遍必然 抄错一处；<b>SQL
+ * 与行形状留在各命令</b>，因为「这个命令要哪几列」只有那个命令知道。所以 {@link #query} 收的是 {@code SQL + 行映射器}、{@link #execute} 收的是
+ * {@code SQL + 参数}，而不是一堆以命令命名的专用方法。
  *
  * <p><b>非线程安全</b>：一条命令一个实例，用完即关（{@link AutoCloseable}）。
  */
@@ -111,6 +113,34 @@ public final class WorkspaceDb implements AutoCloseable {
       throw new IllegalStateException("查询失败：" + e.getMessage(), e);
     }
     return List.copyOf(rows);
+  }
+
+  /**
+   * 执行一条带参的写入语句（{@code INSERT} / {@code UPDATE} / {@code DELETE}）。
+   *
+   * <p><b>为什么必须走 {@code PreparedStatement} 绑定参数</b>：{@code params} 全部来自命令行输入（渠道名、类型、地址、 描述、配置值），拼进
+   * SQL 既是指令注入面、也是引号转义面——一个含单引号的地址就能把语句切坏。绑定把这两件事一起交给驱动。
+   *
+   * <p><b>为什么要就地压制告警</b>：{@code sql} 是方法入参，静态分析眼里天然是非常量（同 {@link #query}）。注入面为零：
+   * 每个调用点传的都是本命令自己写死的常量字面量，值全部走 {@code ?} 占位符绑定，不含任何拼串。
+   *
+   * @param sql 写入语句；由调用命令自己写死的常量，值一律用 {@code ?} 占位
+   * @param params 按 {@code ?} 出现顺序绑定的参数值
+   * @return 受影响行数（{@code INSERT} 为 1；{@code DELETE} 命中为 1、未命中为 0）
+   * @throws IllegalStateException 语句执行失败
+   */
+  @SuppressFBWarnings(
+      value = "SQL_INJECTION_JDBC",
+      justification = "SQL 由调用命令写死为常量字面量，值全部走 ? 占位符绑定")
+  public int execute(String sql, Object... params) {
+    try (PreparedStatement statement = connection.prepareStatement(sql)) {
+      for (int i = 0; i < params.length; i++) {
+        statement.setObject(i + 1, params[i]);
+      }
+      return statement.executeUpdate();
+    } catch (SQLException e) {
+      throw new IllegalStateException("写入失败：" + e.getMessage(), e);
+    }
   }
 
   @Override

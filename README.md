@@ -100,7 +100,7 @@ OryxOS 是企业私有部署的 **Agent 操作系统**：装在企业自己的 K
 | `oryxos-channel-cli` | CLI Channel：`CliChannel`、`oryxos chat` |
 | `oryxos-web` | 能力五「Web Service」：`WebServer`、6 个 `ApiController`、OpenAPI |
 | `oryxos-storage` | SQLite 持久化：Session 与审计表 Repository |
-| `oryxos-cli` | Picocli 主入口、12 个子命令、`ConfigLoader` |
+| `oryxos-cli` | Picocli 主入口、15 个子命令、`ConfigLoader` |
 | `oryxos-boot` | Spring Boot 启动模块、自动配置、依赖聚合（`java -jar` 入口） |
 
 全量 14 个模块（另含 `oryxos-persona` / `oryxos-knowledge` / `oryxos-channel-feishu|wecom|dingtalk`）属扩展演进，核心阶段不建。

@@ -7,10 +7,18 @@ import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 /**
- * {@link NotifyChannelAdapter} 的核心阶段唯一实现：给一个地址发一次 HTTP POST，内容按 JSON 送出。
+ * {@link NotifyChannelAdapter} 的通用档实现：给一个地址发一次 HTTP POST，内容按 JSON 送出。
  *
- * <p><b>只做通用 webhook</b>：不逐家对接企业微信 / 飞书 / 钉钉的专用 API（签名算法、AccessToken 刷新等认证细节核心阶段不做，
+ * <p><b>只做通用 webhook</b>：不逐家对接企业微信 / 飞书 / 钉钉的专用 API（签名算法、AccessToken 刷新等认证细节不在通用档做，
  * FR-003）。地址与类型相关的配置由 {@link NotifyTarget} 带进来，本类只认 {@code url} 这一个键——多认一个键就意味着某一档实现 的细节漏进了通用路径。
+ *
+ * <p><b>方言适配是同包的兄弟类，不是本类的分支</b>（2026-10-15 补强）：IM 群机器人不认 {@code {"content":...}}，且用 HTTP 200
+ * 承载业务错误， 故那些渠道各有一档实现（{@code FeishuNotifyAdapter} 覆盖飞书 / Lark、{@code WeComNotifyAdapter} 覆盖企微）
+ * 把方言与业务码判据收在类内。本类因此<b>不是唯一实现</b>，但它的行为一个字未改—— 「2xx 即送达」对通用 webhook 接收端仍是正确口径。
+ *
+ * <p><b>2026-10-15 修订（补强③）</b>：上一段的「不逐家对接企业微信 / 飞书 / 钉钉的专用 API」这句，主语是<b>通用档</b>——它至今仍成立
+ * （本类确实不认任何方言）。容易被误读成「项目不接这几家」，故补注：<b>群机器人 webhook</b> 已由兄弟类接（飞书 / Lark、企微）， 不接的是需要凭据交换的<b>专用
+ * API</b>（AccessToken 刷新、企微「应用消息」等）。原文保留以留痕。
  *
  * <p><b>超时责任在实现内，不推给注入方</b>：{@link #WebhookNotifyAdapter()} 自建带连接 + 读取超时的 {@link HttpClient}。 若改成注入
  * {@code RestClient}，「推送本身有界」就退化成「谁装配谁负责」——而装配方（第 24 节的 Bean 声明）恰恰是最容易漏掉 这个约束的地方（FR-021）。

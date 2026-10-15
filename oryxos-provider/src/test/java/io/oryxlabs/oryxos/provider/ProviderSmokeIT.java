@@ -7,9 +7,7 @@ import io.oryxlabs.oryxos.storage.entity.LlmCall;
 import io.oryxlabs.oryxos.storage.repository.LlmCallRepository;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -23,6 +21,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -74,7 +73,23 @@ class ProviderSmokeIT {
 
   private static final String SESSION_ID = "smoke-session";
 
-  private static final Path DB_FILE = createDatabaseFile();
+  /**
+   * 临时库目录，由 JUnit 注入并**由 JUnit 删除**（静态字段 → 每个测试类一份，{@code @BeforeAll} 之前注入、 {@code @AfterAll}
+   * 之后递归删除）。
+   *
+   * <p><b>MUST NOT 换回 {@code Files.createTempDirectory}</b>：那样没人删，每跑一次就往 {@code /tmp} 留一个目录。本类目前
+   * **没有实际泄漏**（{@code IT} 后缀不在 surefire 默认 includes 内，必须 {@code -Dtest=ProviderSmokeIT} 点名才跑），但那是
+   * 命名带来的偶然——点名跑一次就漏一个，故一并改掉。
+   *
+   * <p>也 <b>MUST NOT</b> 写成 {@code static final Path DB_FILE = tempDir.resolve(...)}——静态初始化器在
+   * {@code @BeforeAll} <b>之前</b>执行，那时 {@code tempDir} 还是 null。
+   */
+  @TempDir static Path tempDir;
+
+  /** 库文件路径。惰性求值：{@code @DynamicPropertySource} 收的是方法引用，解析属性时才真正落盘。 */
+  private static Path dbFile() {
+    return tempDir.resolve("oryxos.db");
+  }
 
   @Autowired private ProviderProperties properties;
 
@@ -88,16 +103,8 @@ class ProviderSmokeIT {
   @EnableJpaRepositories(basePackageClasses = LlmCallRepository.class)
   static class SmokeApplication {}
 
-  private static Path createDatabaseFile() {
-    try {
-      return Files.createTempDirectory("oryxos-provider-smoke").resolve("oryxos.db");
-    } catch (IOException e) {
-      throw new UncheckedIOException("无法创建冒烟测试用 SQLite 库文件", e);
-    }
-  }
-
   private static String jdbcUrl() {
-    return "jdbc:sqlite:" + DB_FILE;
+    return "jdbc:sqlite:" + dbFile();
   }
 
   @DynamicPropertySource

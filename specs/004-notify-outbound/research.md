@@ -2,6 +2,10 @@
 
 **Feature**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md) | **Created**: 2026-10-14
 
+> **修订记录（2026-10-15 补强②）**：本文件是**动手前的决策记录**，其中若干处「写入路径归第 26 节」「本节无写入路径」的表述已被本次补强推翻——
+> 写入面改由 CLI 三条轻命令提供（D1 的「接缝只留一个方法」结论**因此更强**：写入确实没走接缝）。**本文件正文保留原文以留痕**，
+> 它记录的是当时的裁决与理由，不是现状。现状见 [spec.md](spec.md) FR-028~FR-031 与 [contracts/notify-channel-registry.md](contracts/notify-channel-registry.md) 文件头。
+
 本节所有第三方 API 均在**动手前**于本地依赖中核实过（`javap` / `dependency:tree` / 离线 `dependency:get`），核实结论逐条记在对应决策里。凡「课件与技术方案都查不到」的欠定项，按「有依据的推断 + 显式记入假设」处理，不新开澄清问题。
 
 ---

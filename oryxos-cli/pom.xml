@@ -57,6 +57,17 @@
         </dependency>
 
         <!--
+          jackson-databind：notify-channel add 要把 config 选项的键值对序列化成 config_json。
+          这本是既有传递边（经 oryxos-tool），这里显式化——与 oryxos-tool 把 spring-web / oryxos-storage
+          显式化是同一条纪律：直接 import 的类型就该有直接的依赖边，发行物不新增任何工件。
+          版本由 Spring Boot BOM 管，不写 version。不手写 JSON 转义：那是必然写错一处的那类代码。
+        -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <!--
           @SuppressFBWarnings：轻命令的原生 JDBC（WorkspaceDb）必然撞上 FindSecBugs 的 SQL_INJECTION_JDBC——
           它的判据是「SQL 是否为编译期常量」，而建表脚本按 research D8 必须从 classpath 的 db/schema.sql 切出来，
           天然非常量；换成 PreparedStatement 同样会被报。SQL 全部来自本仓自己的常量与本仓自己的脚本，无外部输入。

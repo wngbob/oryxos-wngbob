@@ -1,6 +1,10 @@
-# Contract: CLI 对外命令面（12 条）
+# Contract: CLI 对外命令面（15 条）
 
 **来源**：[spec.md](../spec.md) FR-002 / FR-003 / FR-010 / FR-015 / FR-016 / FR-021；上游 `specs/000-runtime-kernel/contracts/cli.md`（**本节是它的落地版**，冲突处以本文件为准并已记入 spec 的冲突仲裁记录）。这是**用户可见的对外契约**：命令名、参数、退出码的变更必须走修订程序。
+
+> **修订记录（2026-10-15，第 19 节交付后补强②）**：命令集由 **12 条扩为 15 条**，新增 `notify-channel add|list|remove`（§2.12）。
+> 这是**命令集扩充**，不是对既有命令的修订——既有 12 条的命令名、参数、退出码**一字未动**（§2.10 那行除外，它记的是第 20 节自己的改动）。
+> 扩充理由与设计裁决见 [specs/004-notify-outbound/acceptance-report.md](../../004-notify-outbound/acceptance-report.md)「交付后补强（2026-10-15）②」。
 
 ---
 
@@ -22,10 +26,15 @@
 | 10 | `oryxos provider list` | 轻 | `ProviderListCommand` | `ProviderProperties.SUPPORTED_PROVIDERS` + 文件系统 |
 | 11 | `oryxos tool list` | **重**（第 20 节由轻改重，见 §2.10） | `ToolListCommand` | `ToolRegistry` 接缝 |
 | 12 | `oryxos session list` | 轻 | `SessionListCommand` | 原生 JDBC（`sessions` 表） |
+| 13 | `oryxos notify-channel add <name> --type <type> (--url <值> \| --url-env <ENV_VAR>) [--description <text>] [--config <k=v>]...` | 轻 | `NotifyChannelAddCommand` | 原生 JDBC（`notify_channels` 表） |
+| 14 | `oryxos notify-channel list` | 轻 | `NotifyChannelListCommand` | 原生 JDBC（`notify_channels` 表） |
+| 15 | `oryxos notify-channel remove <name> [--force]` | 轻 | `NotifyChannelRemoveCommand` | 原生 JDBC（`notify_channels` 表） |
 
-**Picocli 组织**：12 个叶子命令类 + 4 个只做分组的类（`ProfileCommand` / `ProviderCommand` / `ToolCommand` / `SessionCommand`），挂在 `OryxOsCli` 的 `subcommands` 上。对外是**空格分隔的多级命令**（`oryxos profile list`）——Picocli 的子命令按首个 token 匹配，名为 `"profile list"` 的单个子命令永远匹配不上，多级命令只能用「组 + 子命令」表达（[research.md](../research.md) D12）。
+**13~15 是 2026-10-15 第 19 节交付后补强② 新增的**（见文件头修订记录）：第 19 节只交付了 `notify_channels` 的**读半边**，没有任何路径能往表里写一行，`notify` 在真实部署里 100% 失败却被记成「预期状态」。三条轻命令补上写入面。它们**不启 Spring 上下文**——按 §1 的唯一判据，注册一个渠道不调模型、不跑引擎，故与 `profile create` / `session list` 同类，走 `WorkspaceDb` 的原生 JDBC。
 
-**全部 12 条 MUST 有可用的 `--help`**（FR-002），包括 4 个分组命令。
+**Picocli 组织**：15 个叶子命令类 + 5 个只做分组的类（`ProfileCommand` / `NotifyChannelCommand` / `ProviderCommand` / `ToolCommand` / `SessionCommand`），挂在 `OryxOsCli` 的 `subcommands` 上。对外是**空格分隔的多级命令**（`oryxos profile list`）——Picocli 的子命令按首个 token 匹配，名为 `"profile list"` 的单个子命令永远匹配不上，多级命令只能用「组 + 子命令」表达（[research.md](../research.md) D12）。
+
+**全部 15 条 MUST 有可用的 `--help`**（FR-002），包括 5 个分组命令。
 
 ---
 
@@ -118,9 +127,39 @@
 
 - 走原生 JDBC 直读 `sessions` 表（轻命令，不启 Spring）。
 
+### 2.12 `oryxos notify-channel add | list | remove`（2026-10-15 补强② 新增）
+
+写入面：`notify_channels` 全局注册表此前**只有读半边**（`JpaNotifyChannelRegistry.resolve()`），没有任何路径能往里写一行。三条轻命令补上这一半，`notify` 从「恒报未配置渠道」变成真能用。
+
+**`add <name> --type <type> (--url <值> | --url-env <ENV_VAR>) [--description <text>] [--config <k=v>]...`**
+
+- **`--url` 与 `--url-env` 互斥且必居其一**，两者都给或都不给 MUST 报错。
+- **`--url-env <ENV_VAR>` 是 `--url '${ENV_VAR}'` 的糖，且是推荐路径**——入库的是**字面量占位符**，真值由读路径在解析渠道时从环境变量取（`docs/TechnicalSolution.md` §6.8「在发送时从环境变量解析，不明文落库」）。凭证不进库、不进 shell 历史。
+- **`--url-env` 的值 MUST 校验为环境变量名形状**（字母或下划线开头，只含字母/数字/下划线）。写成 `--url-env 'FOO BAR'` 会存下 `${FOO BAR}`，而读路径的占位符正则匹配不到它——占位符会被当成字面地址原样发给对端，**静默失败**。
+- **`--config` 可重复，只在第一个 `=` 处切分**（base64 的 secret 常以 `=` 结尾）。键重复 MUST 报错，MUST NOT 后者静默覆盖前者。
+- **`--config url=...` MUST 被拒**：读路径会往 `config` 里强塞 `url` 键，从写入侧也塞会造出两个真相源。
+- **重名 MUST 报错不覆盖**（照 `profile create` 的既有口径），提示先 `remove`。判重走 `INSERT OR IGNORE` + 受影响行数，**MUST NOT 先 SELECT 再 INSERT**（两次往返之间有窗口）。
+- `name` / `type` 去空白后 MUST 非空，`name` MUST NOT 含空白（它是主键，也是 Agent 与模型引用渠道的唯一凭据）。
+- **写入时不校验 `type` 取值**：合法取值由装配处的映射表决定，轻命令看不到容器；写死一份类型清单在 CLI 里会造出第二真相源。拼错的 type 在**路由处**报错并列出已知类型（第 19 节已交付并有测试钉死）。
+
+**`list`**
+
+- 表头 `name  type  url  config  description`，**按 `name ASC` 排序**——第一行就是默认渠道（与 `findFirstByOrderByNameAsc` 同序），表头下加一行标注。
+- `url` 列：整串恰好是一个 `${VAR}` 占位 → 原样打印（用户得知道该设哪个环境变量）；否则打 `<已配置>`。
+- `config` 列**只打键名，从不打值**。
+
+**`remove <name> [--force]`**
+
+- 照 `profile delete` 的确认模式：需确认，`--force` 跳过；未确认时不删除、正常退出（退出码 0）。
+- 名字不存在 MUST 报错并提示 `list`。
+
+**输出纪律（硬约束，测试钉死）**：`url` 与 `config` 的值**含 token**。任何路径——命令输出、异常消息、结构化日志——**MUST NOT 出现它们的值**（章程原则 VIII / SC-006，与 §2.9 `provider list` 同款）。走 `--url-env` 时**可以**打印占位符本身（`${FEISHU_HOOK_URL}`）：那是用户下一步要设的变量名，不是凭证。
+
+**两条写命令自带建表（幂等）**：`notify_channels` 是第 19 节才有的表，**老工作区的库文件里没有它**（`oryxos init` 是幂等的、不追溯加表），而 `.oryxos/` 是跨升级保留的用户数据。故 `add` / `remove` 打开库后先跑一次建表脚本（全是 `CREATE TABLE IF NOT EXISTS`）。`session list` 没这步是因为 `sessions` 表与工作区同龄。
+
 ---
 
-## 3. 通用约定（12 条命令全部适用）
+## 3. 通用约定（15 条命令全部适用）
 
 | 情形 | 退出码 | 行为 |
 | --- | --- | --- |

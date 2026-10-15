@@ -18,6 +18,11 @@
 
 本节是 CLI 课，但**真正值得自动化验收的是会话层**：它是后面所有入口（Web、定时）共用的地基，出口径问题最难查，所以在这就钉死。12 个子命令里凡是数据源尚未就位的，一律**明确输出「未接入」并注明接入节号**，MUST NOT 造一个假的返回值把命令糊过去。
 
+> **修订记录（2026-10-15，第 19 节交付后补强②）**：本节命令面由 **12 条扩为 15 条**，新增 `notify-channel add|list|remove`
+> （契约 [contracts/cli-surface.md](contracts/cli-surface.md) §1 + §2.12）。这是**命令集扩充**，本节既有的 FR / SC 对 12 条旧命令的约束
+> **一字未动**，只是分母从 12 变成 15——下面 FR-002 / SC-001 / SC-006 里的数字已同步回修并标出。
+> 扩充理由：第 19 节只交付了 `notify_channels` 的读半边，没有任何路径能往表里写一行，`notify` 在真实部署里 100% 失败却被记成「预期状态」。
+
 **冲突仲裁记录（本规约据此撰写，后续 plan / tasks 不得偏离）**：
 
 1. **持久化接缝的接口名是 `SessionService`，不是课件里的 `SessionManager`**：沿用第 17 节已报批裁决（上游 `specs/000-runtime-kernel/tasks.md` T036/T045 用 `SessionService`，T077 明写「统一 `SessionManager`→`SessionService` 命名」）。本节的落地物随之定为：`SessionService` 接口补齐 `getOrCreate` / `get` 两个操作；实现类 `JpaSessionService`（对齐第 16 节 `JpaLlmCallRecorder` 的命名）；测试类 `SessionServiceTest`（课件 harness 里的 `SessionManagerTest`）。课件原文的 `SessionManager` 只作历史措辞保留在本条记录里。
@@ -157,8 +162,10 @@
 ### Functional Requirements
 
 - **FR-001**: `oryxos init` MUST 在当前目录创建工作区：Agent 目录、公共 Skill 库、记忆目录与记忆文件、Bootstrap 三件套、MCP 配置模板、会话/日志/产出三个子目录，并建出数据库与全部表（走手工建表脚本）。MUST 幂等——已存在的目录与文件一律不覆盖；MUST 输出「已有 / 新建」两份清单。MUST NOT 生成任何默认 Agent（仲裁 14）——Agent 目录建出来是空的，`init` 之后直接敲 `chat` 提示「没有可用 Agent，先 `oryxos profile create <name>`」是预期行为。
-- **FR-002**: CLI MUST 提供 12 个子命令且每个 `--help` 可用：`init`、`status`、`chat`、`serve`、`gateway`、`profile list|create|show|delete`、`provider list`、`tool list`、`session list`。
-- **FR-003**: 命令 MUST 按轻重分流：轻命令（`init`、`status`、`profile list/create/show/delete`、`provider list`、`tool list`、`session list`）MUST NOT 启动 Spring 上下文，直接走文件与数据库；重命令（`chat`、`serve`、`gateway`）MUST 启动。分流判据只有一条：这条命令要不要调模型、跑引擎。
+- **FR-002**: CLI MUST 提供 **15** 个子命令且每个 `--help` 可用：`init`、`status`、`chat`、`serve`、`gateway`、`profile list|create|show|delete`、`notify-channel add|list|remove`、`provider list`、`tool list`、`session list`。
+  > **2026-10-15 回修**：原为 12 条，第 19 节交付后补强② 新增 `notify-channel add|list|remove`（契约 §2.12）。原 12 条**逐字未动**。
+- **FR-003**: 命令 MUST 按轻重分流：轻命令（`init`、`status`、`profile list/create/show/delete`、`notify-channel add/list/remove`、`provider list`、`tool list`、`session list`）MUST NOT 启动 Spring 上下文，直接走文件与数据库；重命令（`chat`、`serve`、`gateway`）MUST 启动。分流判据只有一条：这条命令要不要调模型、跑引擎。
+  > **2026-10-15 回修**：`notify-channel` 三条按同一条判据归轻——注册一个通知渠道不调模型、不跑引擎（契约 §1）。
 - **FR-004**: `chat` MUST 支持交互式多轮对话：读一行 → 交给引擎处理 → 打印结果，循环往复，直到 `/quit` 或输入流结束。`--profile <name>` 指定 Agent；缺省时取工作区**唯一**的 Agent；多于一个且未指定 MUST 清晰报错并列出可选名。
 - **FR-005**: `chat` MUST 支持 `--message "<text>"` 单条模式：输出响应后正常退出（退出码 0），不进入交互循环。
 - **FR-006**: 会话标识 MUST 由 channel、user、profile 三段联合生成；生成逻辑 MUST 只存在于持久化接缝的**唯一一处**；所有入口 MUST 只提供三元组，MUST NOT 自行拼接字符串。
@@ -186,18 +193,20 @@
 - **会话消息（SessionMessage）**：会话历史的一条。角色、内容、该轮请求的工具调用、工具调用标识、时间戳。口径与 `specs/000-runtime-kernel/data-model.md` A1 的 `messages_json` 元素一致。
 - **会话记录（`sessions` 表）**：会话的持久化形态。主键为会话标识，另有所属 Agent 名、接入渠道、用户标识、序列化后的对话历史、状态、创建/最后活跃/归档三个时间戳。**表由手工建表脚本创建**，不依赖框架自动迁移。
 - **工作区（`.oryxos/`）**：`oryxos init` 创建的目录树与数据库文件。它是本节所有轻命令的输入。
-- **子命令**：CLI 的 12 个入口，每个自带帮助与退出码约定。
+- **子命令**：CLI 的 **15** 个入口，每个自带帮助与退出码约定（2026-10-15 由 12 扩为 15，见文件头修订记录）。
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: 轻命令从敲下到输出在**人感知不到等待**的量级（秒级以内），且执行全程**不启动 Spring 上下文**；重命令启动 Spring 上下文（启动日志可见）。**本条只判「分流是否正确」**（12 条命令各自该起 / 不该起上下文，正确率 12/12）；命令本身是否存在与 `--help` 是否可用由 SC-006 判，两条不重复计数。
+- **SC-001**: 轻命令从敲下到输出在**人感知不到等待**的量级（秒级以内），且执行全程**不启动 Spring 上下文**；重命令启动 Spring 上下文（启动日志可见）。**本条只判「分流是否正确」**（**15** 条命令各自该起 / 不该起上下文，正确率 **15/15**）；命令本身是否存在与 `--help` 是否可用由 SC-006 判，两条不重复计数。
+  > **2026-10-15 回修**：分母由 12 改为 15，新增的三条 `notify-channel` 归轻（契约 §1）。
 - **SC-002**: 同一三元组连续 N 次取会话，得到的**不同**会话标识数为 **1**（幂等）。
 - **SC-003**: 三元组三处任一改动，得到的会话标识**必然**与原值不同（隔离率 100%）。
 - **SC-004**: 会话落库再读回，消息条数与顺序一致率 **100%**（含工具调用与工具结果字段）。
 - **SC-005**: 进程重启（新建上下文）后，已存会话仍可查到（丢失率 **0**）。
-- **SC-006**: 12 个子命令全部可执行且 `--help` 可用（覆盖率 **12/12**）。**本条只判「命令存在且帮助可用」**，不判分流。
+- **SC-006**: **15** 个子命令全部可执行且 `--help` 可用（覆盖率 **15/15**）。**本条只判「命令存在且帮助可用」**，不判分流。
+  > **2026-10-15 回修**：分母由 12 改为 15。新增三条的「存在且已挂进命令树」由 `CliCommandTreeTest` 钉死（它断言命令树的叶子恰好是契约 §1 的那 15 条——只断言「新增的在」而不钉总数，漏挂或误挂都能溜过去）。
 - **SC-007**: 需要工作区的命令在非工作区目录执行时，**100%** 给出「先跑 `oryxos init`」提示并退出码 1。
 - **SC-008**: 密钥值在命令输出、结构化日志与报错信息中的出现次数为 **0**。
 - **SC-009**: 本节全部自动化测试在 `mvn test` 下全绿，且不访问网络。

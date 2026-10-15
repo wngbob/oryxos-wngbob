@@ -24,16 +24,18 @@ public record NotifyTarget(String channelType, Map<String, String> config) {
 
 | # | 要求 | 怎么判定 |
 | --- | --- | --- |
-| 1.1 | 签名里 MUST NOT 出现「企业微信」「飞书」「钉钉」「wecom」「feishu」「dingtalk」「webhook」这类某一档实现特有的词 | 对两个文件的源码 grep 这些词，命中数 = 0 |
+| 1.1 | 签名里 MUST NOT 出现「企业微信」「飞书」「钉钉」「wecom」「feishu」「dingtalk」「webhook」这类某一档实现特有的词 | **判定口径（2026-10-15 澄清）**：对两个文件的**方法名 / 参数名与类型 / 返回类型 / record 组件名**逐一核对，这些位置命中数 = 0。原文本写「对源码 grep，命中数 = 0」——那个口径本身有歧义且**实际不成立**：`NotifyChannelAdapter` 的 javadoc 里为说明实现去向提到了 `WebhookNotifyAdapter`（是**类名**、不是厂商字面量，且早于本节就存在）。javadoc 里的说明性提及不构成契约违反；**代码标识符**里出现才构成 |
 | 1.2 | 接口 MUST NOT 出现「渠道类型枚举」「URL 字段」「HTTP 方法」等实现细节 | 人读签名即可判定；`channelType` 是 `String` 而非枚举，`config` 是不透明的 `Map<String,String>` |
 | 1.3 | `send` MUST NOT 有返回值 | 送达即返回，失败即抛异常（无「部分成功」概念） |
-| 1.4 | 两个文件的**签名与字段**逐字保持现状 | `git diff` 对这两个文件为空 |
+| 1.4 | 两个文件的**签名与字段**逐字保持现状 | `git diff` 对这两个文件为空（2026-10-15 补强后复核：仍为空） |
 
 **为什么 `send` 不返回结果对象**：返回值会立刻引出「失败要不要返回而不是抛」「部分渠道成功怎么办」两个本阶段不存在的问题（一次推送只有一个目标）。失败抛异常 + 由 `ToolExecutor` 统一接住落审计（FR-008），是既有的、唯一的一条失败路径。
 
 ---
 
-## 2. `WebhookNotifyAdapter` —— 核心阶段唯一实现（FR-003）
+## 2. `WebhookNotifyAdapter` —— 通用档实现（FR-003）
+
+> **修订（2026-10-15 补强，已报批）**：本标题原文是「核心阶段唯一实现」。**「唯一」二字已被推翻**——现在同包另有方言档 `FeishuNotifyAdapter`（飞书 / Lark）与路由档 `RoutingNotifyChannelAdapter`，契约分别见 §2.4 / §2.5。**本节其余内容（§2.1~§2.3、§2.2.10）逐条继续成立**：`WebhookNotifyAdapter` 的代码一行未改（仅类 javadoc 首句由「核心阶段唯一实现」改为「通用档实现」，并补一句指向同包方言档），它的报文形状与「2xx 即送达」口径对**通用 webhook 接收端**依然正确。FR-003 被修订的也只是「唯一」二字，见 `spec.md` FR-003 的修订注。
 
 `io.oryxlabs.oryxos.tool.notify.WebhookNotifyAdapter implements NotifyChannelAdapter`
 
@@ -72,7 +74,7 @@ WebhookNotifyAdapter(Duration pushTimeout)                     // 包级私有�
 
 **为什么 `url` 空白的校验在适配器而不在注册表**：注册表是**类型无关**的（它不知道 `webhook` 这一档需要 url 还是别的认证信息），「什么配置才算合法」是**实现类的知识**（[research.md](../research.md) D8）。
 
-**为什么用 `content` 作字段名**：FR-003 说「把内容按 JSON 送出」，spec 的协议假设是 `{"content": ...}`。这是本节唯一被钉死的报文形状；对端要别的字段名时走扩展阶段的专用实现。
+**为什么用 `content` 作字段名**：FR-003 说「把内容按 JSON 送出」，spec 的协议假设是 `{"content": ...}`。这是**通用档**被钉死的报文形状；对端要别的字段名时走**专用实现**——2026-10-15 补强落地的 `FeishuNotifyAdapter`（§2.4）正是这句话的兑现：它是另一个类，本档的形状未动。
 
 ### 2.3 抛出的异常类型
 
@@ -83,6 +85,100 @@ WebhookNotifyAdapter(Duration pushTimeout)                     // 包级私有�
 | 连接失败 / 超时 | `RestClient` 抛出的 `ResourceAccessException`，**原样上抛** |
 
 **不新增自定义异常类型**（[research.md](../research.md) D11）：这些异常最终都由第 20 节接上的 `ToolExecutor` 统一接住，把 `e.getMessage()` 写进 `tool_invocations.error_message`（第 17 节已交付的行为）。异常类型不携带额外语义，新增只会多一个没人 catch 的类。
+
+---
+
+## 2.4 `FeishuNotifyAdapter` —— 方言档实现（FR-022 ~ FR-024，2026-10-15 补强新增）
+
+`io.oryxlabs.oryxos.tool.notify.FeishuNotifyAdapter implements NotifyChannelAdapter`
+
+**它解决什么**：飞书 / Lark 群机器人**用 HTTP 200 承载业务错误**。通用档只判状态码，会把「报文写错、群里一条消息都没有」判成成功，`notify` 于是返回「已推送」——失败连 `tool_invocations` 都进不去。本档读响应体、按业务码判成败。
+
+| # | 契约 | 怎么判定 |
+| --- | --- | --- |
+| 2.4.1 | 请求体形状 MUST 是 `{"msg_type":"text","content":{"text":<content>}}` | 本地假 webhook 收到体的 JSON 逐字段断言 |
+| 2.4.2 | 内容 MUST 逐字送达（中文 / 换行 / 引号 / 反斜杠不被转义或截断） | 同上，取值与原串 `isEqualTo` |
+| 2.4.3 | `config` 有非空白 `secret` 时，请求体顶层 MUST 附 `timestamp`（秒级）与 `sign` | 固定时钟下断言 `timestamp` 取值 + `sign` 等于按官方算法离线算出的期望值 |
+| 2.4.4 | 未配 `secret`（缺失或纯空白）时，`timestamp` 与 `sign` **MUST NOT 出现**（而不是出现为 `null`） | 请求体键集合大小断言 |
+| 2.4.5 | 送达判据 fail-closed：成功 ⇔ 体是 JSON 对象 **且** `code` 存在 **且** 为整数 **且** `== 0` | 逐条覆盖：`code:0` 通过；`code:19002` 抛；`{"data":{}}`（无任何业务码）抛 |
+| 2.4.6 | `code` 缺失时才退看 `StatusCode`；两者都在时 **`code` 优先** | `{"StatusCode":0,"code":19002}` MUST 抛 |
+| 2.4.7 | MUST NOT 用 `path("code").asInt() != 0` 判定 | Jackson 在字段**缺失**时 `asInt()` 也返回 `0`，那个写法把「缺失」判成成功，与 fail-closed 相反。`{"data":{}}` 用例即钉死这一点 |
+| 2.4.8 | 空体 / 纯空白 / 非 JSON / 非 JSON 对象 / 业务码非整数 → 一律抛 | 各自的用例。注意 Jackson 对空体与纯空白返回 `MissingNode` 而**不抛异常**，故必须显式判 `isObject()` |
+| 2.4.9 | 非 JSON 响应体的异常 **MUST NOT 挂 cause、MUST NOT 回显 body** | body 可能来自网关错误页（常回显带 token 的 URL）；审计表只写 `e.getMessage()`。用例断言消息不含 body 片段 |
+| 2.4.10 | 异常消息 MUST 含业务码与 `msg`，MUST NOT 含 `url` | 断言消息含 `19002`、不含地址与 token |
+| 2.4.11 | 失败抛 `IllegalStateException`（**不新增自定义异常类型**，同 §2.3）；`url` 缺失/空白抛 `IllegalArgumentException` 且**一次请求都不发** | 异常类型断言 + `getRequestCount()` |
+| 2.4.12 | 超时与 `Redirect.NEVER` 与通用档同口径：连接 + 读取各 10 秒，3xx **不跟随**、按失败上抛 | 超时用例；3xx 用例断言第二个假服务收到 **0** 次请求 |
+| 2.4.13 | MUST NOT 打日志（`url` 与 `secret` 都是凭证） | 源码人读 |
+
+**读 body 改变了超时语义（2026-10-15 实测确认）**：通用档用 `toBodilessEntity()` 不读 body，读取上限只量到「响应头到达」；本档必须读 body，于是「给了响应头却拖着不给 body」也会被上限兜住。**两条路径抛出的异常类型不同**——响应头超时是 `ResourceAccessException`，响应体读取超时被 Spring 在「提取响应体」那一步包成 `RestClientException`。两者都是 `RestClientException` 的实例，都原样上抛到 `ToolExecutor` 的失败审计路径，故对调用方无差别。这条差异**已被测试实测确认**（`FeishuNotifyAdapterTest` 两条超时用例分别断言这两种类型），不是推测。
+
+**为什么 `lark` 也走本档**：Lark 是飞书的海外版，自定义机器人 hook 的报文与响应语义**同一套协议**，只是域名不同（域名在 `url` 里，本档不关心）。故装配处把两个 `type` 取值指向**同一个实例**（§2.5）。
+
+---
+
+## 2.5 `RoutingNotifyChannelAdapter` —— 按 type 分派的路由接缝（FR-025 / FR-026，2026-10-15 补强新增）
+
+`io.oryxlabs.oryxos.tool.notify.RoutingNotifyChannelAdapter implements NotifyChannelAdapter`
+
+**它解决什么**：有了第二个实现，`NotifyTools` 注入的不再是「唯一那个适配器」，而必须是「按 `type` 选出来的那一个」。本类就是那个选择点。
+
+| # | 契约 | 怎么判定 |
+| --- | --- | --- |
+| 2.5.1 | 构造收 `Map<String, NotifyChannelAdapter>`，MUST 防御性拷贝 | 构造后改动传入的 `Map`，路由行为不变 |
+| 2.5.2 | 查表前对 `channelType` 做 `trim()` + `toLowerCase(Locale.ROOT)` | `"  Feishu  "` / `"LARK"` 命中方言档。`Locale.ROOT` 是为了避开土耳其语 `I`/`i` 陷阱 |
+| 2.5.3 | 映射表 MUST 由装配处**显式给出**；本类 MUST NOT 按类型扫描容器 | 章程原则 10。本类源码里 MUST NOT 出现任何厂商字面量 |
+| 2.5.4 | 未知 `type` MUST 抛 `IllegalArgumentException`，消息列出已知类型且**顺序确定** | 直接拼 `keySet()` 的迭代顺序未指定，会让测试 flaky；实现按字典序排序。用例断言消息含 `"feishu, lark, webhook, wecom"`（补强③ 起为四个取值） |
+| 2.5.5 | 未知 `type` 时 MUST NOT 委派给任何一档、MUST NOT 发出请求 | 两个替身都 `verify(never())`；端到端用例断言 `getRequestCount() == 0` |
+| 2.5.6 | `channelType` 为 `null` 或纯空白 MUST 抛明确异常，MUST NOT 是 NPE | 断言异常类型为 `IllegalArgumentException` 且消息含「type 为空」 |
+| 2.5.7 | 每次 `send` MUST 恰好委派一次（不重试、不广播） | `verify(times(1))` |
+| 2.5.8 | 映射表为空时任何 `type` 都抛，MUST NOT 假装送达 | 空 Map 用例 |
+
+**为什么未知 `type` 是报错而不是静默退回通用档**（2026-10-15 用户裁决）：静默退回会把「type 拼错」变成「用错的方言发出去」——而错的方言在飞书那里是 HTTP 200 + 业务码 19002，正是本补强要消灭的假成功形态。报错在路由处**一次请求都不发**，比发出去再失败更早、更明确。
+
+**装配处的映射表**（`CliAssemblyConfiguration#notifyChannelAdapter`，契约要求写在装配侧而非本类）：
+
+```
+"webhook" → WebhookNotifyAdapter
+"feishu"  → FeishuNotifyAdapter  ┐ 同一个实例
+"lark"    → FeishuNotifyAdapter  ┘
+"wecom"   → WeComNotifyAdapter      ← 2026-10-15 补强③
+```
+
+**两条装配硬约束**（由 `NotifyAssemblyTest` 起真上下文钉死）：
+
+1. `NotifyChannelAdapter` 类型的 Bean **恰好一个**，且是路由实现。若把 `FeishuNotifyAdapter` 或 `WeComNotifyAdapter` 也声明成 `@Bean`，容器里就有两个同类型候选，`NotifyTools` 注入当场变成 `NoUniqueBeanDefinitionException`——**手工 `new` 一个路由来断言会把这条绕过去**，故必须起真上下文。
+2. 映射表 MUST 在方法体内**就地构造**，MUST NOT 写成 `@Bean` 方法的参数（那是既有 `providerMap` 用 `@Qualifier` 绕开的那个坑）。
+
+---
+
+## 2.6 `WeComNotifyAdapter` —— 企业微信群机器人方言档（FR-032 ~ FR-035，2026-10-15 补强③ 新增）
+
+`io.oryxlabs.oryxos.tool.notify.WeComNotifyAdapter implements NotifyChannelAdapter`
+
+**它解决什么**：与 §2.4 同一个理由——企微群机器人**也用 HTTP 200 承载业务错误**（2026-10-14 实测：报文写错时回 `HTTP 200` + `{"errcode":40008,"errmsg":"invalid message type"}`，群里一条消息都没有）。通用档只判状态码 → 假报「已推送」。
+
+**与 §2.4 的关系**：形状照抄飞书档，**减去签名那一层**。两者是**镜像**而不是同一份——见 2.6.1。
+
+| # | 契约 | 怎么判定 |
+| --- | --- | --- |
+| 2.6.1 | 请求体形状 MUST 是 `{"msgtype":"text","text":{"content":<content>}}` | 本地假 webhook 收到体的 JSON 逐字段断言。**键名 `msgtype` 无下划线、正文在 `text.content`**，与飞书档的 `msg_type` / `content.text` 恰好互换；用例**同时断言 `has("msgtype")` 为真且 `has("msg_type")` 为假**，把镜像关系钉死 |
+| 2.6.2 | 内容 MUST 逐字送达（中文 / 换行 / 引号 / 反斜杠不被转义或截断） | 同上，取值与原串 `isEqualTo` |
+| 2.6.3 | 送达判据 fail-closed：成功 ⇔ 体是 JSON 对象 **且** `errcode` 存在 **且** 为整数 **且** `== 0` | 逐条覆盖：`errcode:0` 通过；`errcode:40008` 抛；`{"data":{}}`（无业务码）抛；`errcode:null` / `"0"` / `0.5` 抛 |
+| 2.6.4 | MUST **只认 `errcode` 一个字段**，MUST NOT 引入飞书那个 `StatusCode` 兼容字段 | 用例：`{"StatusCode":0,"StatusMessage":"success"}` MUST 抛（企微没有该历史包袱，多认一个字段就是多一处要维护的口径） |
+| 2.6.5 | MUST NOT 用 `path("errcode").asInt() != 0` 判定 | 同 2.4.7。`{"data":{}}` 与 `{"StatusCode":0}` 两条用例即钉死这一点（变异测试实测：改成该写法后这两条 + `errcode` 非整数那条共 **3 条变红**） |
+| 2.6.6 | 空体 / 纯空白 / 非 JSON / 非 JSON 对象 / 业务码非整数 → 一律抛 | 各自的用例 |
+| 2.6.7 | 非 JSON 响应体的异常 **MUST NOT 挂 cause、MUST NOT 回显 body** | 用例断言消息不含 `html` 与 URL 里的 key |
+| 2.6.8 | 异常消息 MUST 含业务码与 `errmsg`，MUST NOT 含 `url` | 断言消息含 `40008` / `invalid message type`，不含地址与 key |
+| 2.6.9 | 失败抛 `IllegalStateException`；`url` 缺失/空白抛 `IllegalArgumentException` 且**一次请求都不发** | 异常类型断言 + `getRequestCount()` |
+| 2.6.10 | 超时与 `Redirect.NEVER` 与其余两档同口径：连接 + 读取各 10 秒，3xx **不跟随**、按失败上抛 | 超时用例；3xx 用例断言第二个假服务收到 **0** 次请求 |
+| 2.6.11 | **MUST NOT 注入时钟、MUST NOT 读取 `secret`**（企微群机器人没有签名机制，凭证就是 URL 里的 `key`） | 构造器只有两个（无参 / 包级 `Duration`），源码人读；用例断言未配 `secret` 时报文体仍只有 2 个键 |
+| 2.6.12 | MUST NOT 打日志（`url` 里的 `key` 是凭证本身） | 源码人读 |
+
+**为什么企微是独立的实现类而不是复用飞书档加个开关**：报文形状差一个字段名、业务码字段不同名、一个有签名一个没有——三处差异里没有一处能用参数抹平，而加开关会让「飞书档」这个名字不再诚实。这与「Lark 复用飞书档」正相反：Lark 与飞书的报文**逐字一致**，只是域名不同，域名在 `url` 里、适配器根本不看，所以复用是零代价的。
+
+**为什么刻意不抽公共基类**（2026-10-15 裁决）：两档的 `send()` 骨架、`parseObject()` 与构造器约 60 行同形。不抽的三条理由：① 抽 = 改动已交付且被 19 条测试钉死的 `FeishuNotifyAdapter`，属软门禁②事件，收益小于风险；② 项目既有裁决同向（`ProfileLoader` / `McpServerConfigLoader` / `JpaNotifyChannelRegistry` 三处 `envLookup` 刻意不合并）；③ 目前只有两档方言。**第三次出现（钉钉）才是抽的时机**——届时抽的是 `send()` 模板方法与 `parseObject()`，各档只留 `payload()` 与「业务码字段名 + 错误文案」。
+
+**未做（边界）**：企微 text 的 2048 字节上限**不做客户端预校验**——超限时企微回非 0 `errcode`，2.6.3 的 fail-closed 判据会兜住并落审计。预校验等于在客户端维护一份对端常量。企微「应用消息」（需 corpid/corpsecret 换 AccessToken）是**另一回事**，属扩展阶段专用 Adapter。
 
 ---
 

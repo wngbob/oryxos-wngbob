@@ -198,7 +198,8 @@ Agent 跨多次对话记住用户的偏好、项目背景和关键决策。用�
 
 #### 命令行
 
-- **FR-080**: 系统 MUST 提供 12 个命令:`init`、`status`、`chat`、`serve`、`gateway`、`profile list/create/show/delete`、`provider list`、`tool list`、`session list`。
+- **FR-080**: 系统 MUST 提供 **15** 个命令:`init`、`status`、`chat`、`serve`、`gateway`、`profile list/create/show/delete`、`notify-channel add/list/remove`、`provider list`、`tool list`、`session list`。
+  > **2026-10-15 回修**：原为 12 个。第 19 节交付后补强② 新增 `notify-channel add|list|remove`（落地契约 `specs/003-cli-session/contracts/cli-surface.md` §1 + §2.12）——第 19 节只交付了通知渠道注册表的读半边，没有任何路径能往里写一行，`notify` 在真实部署里 100% 失败。原 12 个命令**逐字未动**。
 - **FR-081**: 不需要 LLM 的命令(如 `init`、`profile list`)MUST 直接走文件操作,保证启动速度;需要 LLM 的命令才启动完整运行时。
 
 ### Key Entities
@@ -224,7 +225,8 @@ Agent 跨多次对话记住用户的偏好、项目背景和关键决策。用�
 - **SC-005**: 会话创建 P99 延迟 ≤ 200ms;系统内部转发开销 ≤ 50ms(不含 LLM 厂商延迟)。
 - **SC-006**: 服务重启后,进行中的会话与长期记忆 100% 恢复、零丢失。
 - **SC-007**: Agent 跨对话记住用户偏好并在后续对话中引用(验收路径:告知偏好 → 写入 → 重启 → 相关问题回答体现偏好)。
-- **SC-008**: 12 个 CLI 命令与 10 个 REST 端点全部可用;参数错误、资源不存在、Provider 故障、超时四类错误都返回统一格式的错误响应。
+- **SC-008**: **15** 个 CLI 命令与 10 个 REST 端点全部可用;参数错误、资源不存在、Provider 故障、超时四类错误都返回统一格式的错误响应。
+  > **2026-10-15 回修**：CLI 分母由 12 改为 15，同 FR-080。10 个 REST 端点未变。
 - **SC-009**: 新用户参照部署文档 30 分钟内完成单节点部署;命令行工具有清晰的帮助与错误提示。
 - **SC-010**: 至少 DeepSeek 与 Kimi 两家 LLM 真实跑通。
 

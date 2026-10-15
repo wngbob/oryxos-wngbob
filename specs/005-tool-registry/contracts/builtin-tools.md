@@ -197,7 +197,7 @@
 1. **Bean 声明**（第 19 节挂账，从第 24 节提前到本节）；
 2. **给 `channel` 参数补 `@ToolParam(required = false)`** —— 它是可选参数，不标注的话 schema 会把它列进 `required`，模型每次都必须编一个渠道名出来。这条改造点已在 `CLAUDE.md` 与 `specs/004-notify-outbound/tasks.md` 记为 L20 改造点。
 
-**已知边界（第 19 节实测，本节不修）**：通用 webhook 报文 `{"content":"..."}` 不被 IM 群机器人接受（飞书回 `HTTP 200` + `code:19002`），而 `WebhookNotifyAdapter.send()` 只判 HTTP 状态码 → `notify` 会**假报"已推送"**。方言适配（如 `FeishuNotifyAdapter`）归扩展阶段，**作为新增实现类**，接口与调用方零改动。实测证据见 `specs/004-notify-outbound/manual-test-guide.md` §4。
+**已知边界（第 19 节实测，本节不修）**：通用 webhook 报文 `{"content":"..."}` 不被 IM 群机器人接受（飞书回 `HTTP 200` + `code:19002`），而 `WebhookNotifyAdapter.send()` 只判 HTTP 状态码 → `notify` 会**假报"已推送"**。方言适配（如 `FeishuNotifyAdapter`）归扩展阶段，**作为新增实现类**，接口与调用方零改动。实测证据见 `specs/004-notify-outbound/manual-test-guide.md` 附录 A.2。
 
 ### §2.12 `web_fetch`（补强新增）
 

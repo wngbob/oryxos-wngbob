@@ -2,6 +2,11 @@
 
 **Feature**: [spec.md](../spec.md) | **Plan**: [plan.md](../plan.md) | **Created**: 2026-10-14
 
+> **修订记录（2026-10-15 补强②）**：本文件 §1.2、§2.5、§3.5 三处涉及「写入路径归第 26 节」的措辞已被本次补强推翻——
+> 写入面改由 CLI 三条轻命令 `notify-channel add|list|remove` 提供（走原生 JDBC，**不经过本接缝**）。
+> 三处各自加了带日期的修订注。**接缝本身（§1、§3、§4）的形状一个字未改**：`NotifyChannelRegistry` 仍只有一个 `resolve` 方法，
+> `NotifyChannelRepository` 仍无写入方法，DDL 列名仍逐字未动。
+
 本文件钉死本节新增的**接缝**（`NotifyChannelRegistry`）与**持久化层**（`NotifyChannelEntity` / `NotifyChannelRepository` / DDL）的形状，以及「行 → 通知目标」的确定性口径。
 
 > **接缝是超出课件交付物清单的新 public 类型**（软门禁 ① 报备项，随仲裁 3 一并报批通过）。课件的解析点是 `profileContext.resolveNotifyChannel(channel)`，按依赖方向落不了地（[research.md](../research.md) D1）。**本文件定稿其名称与形状。**
@@ -21,7 +26,7 @@ public interface NotifyChannelRegistry {
 | # | 要求 | 理由 / 判定 |
 | --- | --- | --- |
 | 1.1 | **只有一个方法** `resolve(String)` | 本节全部诉求就是「按名解析 / 缺省取默认 / 解析不到报错」（FR-006 / FR-011）。多一个方法都无调用方（YAGNI） |
-| 1.2 | **MUST NOT 出现写入方法**（`save` / `delete` / `add` / `remove` / `importFrom`…） | FR-014 / 仲裁 2：本节不引入写入路径。第 26 节加写入时**只能新增方法**，不改本节调用方（章程原则 VII：升级只新增实现类/方法、不改接口和调用方） |
+| 1.2 | **MUST NOT 出现写入方法**（`save` / `delete` / `add` / `remove` / `importFrom`…） | FR-014 / 仲裁 2：本节不引入写入路径。第 26 节加写入时**只能新增方法**，不改本节调用方（章程原则 VII：升级只新增实现类/方法、不改接口和调用方）。<br>**修订（2026-10-15 补强②）**：写入面**没有**走这个接缝——它落在 CLI 三条轻命令上（原生 JDBC，轻命令不启 Spring 上下文，够不着这个 Bean）。故本行**依然成立且更强**：接缝保持只读，第 26 节若加 REST 写入，仍按「只能新增方法」走 |
 | 1.3 | **MUST NOT 出现 `list()` / `find()` / `exists()`** | 无调用方；`list` 还会诱导调用方自己排序，破坏默认渠道口径的唯一性（1.5） |
 | 1.4 | 入参名 `channelName`，`null` 与空白等同「不传」 | FR-004 / FR-011 |
 | 1.5 | 返回 `NotifyTarget`（**不是** `Optional`、**不是** `null`） | 「解析不到」是**错误**而非「空结果」——FR-006 要求明确报错。返回 `Optional` 会把「忘了处理空」这个 bug 交给调用方，而调用方（`NotifyTools`）的正确行为恰恰是抛异常 |
@@ -45,9 +50,13 @@ public interface NotifyChannelRegistry {
 **「走默认」与「名字打错」的报错文案 MUST 可区分**（两种情形要的是两种不同的处理动作）：
 
 ```text
-未配置任何通知渠道，请先在注册表中添加一个（第 26 节提供管理入口）
-未找到名为 'team-lrak' 的通知渠道，请检查渠道名拼写
+未配置任何通知渠道，无法推送——请先跑 `oryxos notify-channel add <name> --type <type> --url-env <ENV_VAR>` 添加一个渠道
+未找到名为 'team-lrak' 的通知渠道——请检查渠道名是否写错，或改用默认渠道
 ```
+
+> **修订（2026-10-15 补强②）**：本表原先引的文案与实际交付的**不一致**——原文写的是「未配置任何通知渠道，请先在注册表中添加一个（第 26 节提供管理入口）」，
+> 而代码里从来是「…请先在通知渠道注册表里添加一个渠道」。**两处都改**：契约按实际代码回正，代码的指引也从「注册表」改成**具体命令**——
+> 第 26 节的管理台是只读的，指过去等于没指。断言只钉 `hasMessageContaining("未配置任何通知渠道")`，改尾句不动判据。
 
 ---
 
@@ -61,11 +70,11 @@ public JpaNotifyChannelRegistry(NotifyChannelRepository repository)
 
 | # | 要求 | 理由 / 判定 |
 | --- | --- | --- |
-| 2.1 | 构造只接受 `NotifyChannelRepository` 一个接口 | 依赖面最小；不做缓存（渠道数量个位数，查库成本可忽略，缓存会引入失效问题） |
+| 2.1 | 构造只接受 `NotifyChannelRepository` 一个接口 | 依赖面最小；不做缓存（渠道数量个位数，查库成本可忽略，缓存会引入失效问题）。<br>**2026-10-15 补强②**：新增一个**包级私有**的二参构造 `(repository, UnaryOperator<String> envLookup)` 供测试注入环境变量查询；**public 一参构造保留**，故装配处（`CliAssemblyConfiguration.notifyChannelRegistry()`）一行未改 |
 | 2.2 | **落 `oryxos-tool`，不落 `oryxos-storage`** | 若落 storage 就形成 `storage → tool` 反向边（[research.md](../research.md) D1） |
 | 2.3 | 默认渠道 MUST 用 `repository.findFirstByOrderByNameAsc()` | 排序下推 SQL；`findAll()` + 内存排序会把整表读进来，且无 `ORDER BY` 时 SQLite 行序无保证（D6） |
 | 2.4 | 行→目标的映射 MUST 逐条实现 [data-model.md](../data-model.md) §5 的六步 | 每个分支都要有对应断言 |
-| 2.5 | MUST NOT 做 `${ENV_VAR}` 占位解析 | 该口径随第 26 节的写入路径一并定；本节**不假装实现了它**（仲裁 2） |
+| 2.5 | ~~MUST NOT 做 `${ENV_VAR}` 占位解析~~ **（2026-10-15 补强② 已推翻并落地）** | 原写「该口径随第 26 节的写入路径一并定；本节**不假装实现了它**」。**实际**：本次已落地**读时解析**（spec FR-028~FR-030）——库里存字面量 `${VAR}`，解析渠道时替换；变量未设置则抛异常，消息只带变量名。形状不合法的占位（`${A B}`）原样保留、不报错。`toTarget` 因此从 `static` 改为实例方法 |
 | 2.6 | MUST NOT 把 `url` 值写进日志或异常消息 | FR-019：含 token 的地址是敏感串。报错只提渠道名 |
 | 2.7 | MUST NOT 带 Spring 注解 | 零装配 |
 
@@ -99,7 +108,7 @@ public interface NotifyChannelRepository extends JpaRepository<NotifyChannelEnti
 | 3.2 | `name` 是 `@Id` 且**无 `@GeneratedValue`** | 主键是业务键（人指定的注册名），自增策略会改写插入的键 |
 | 3.3 | `configJson` 保持**原始字符串**，MUST NOT 用 `@Convert` 或在此层解析 JSON | 解析与校验留在消费方（`JpaNotifyChannelRegistry`）；实体层解析会把「配置形状」的知识塞进持久化层（[research.md](../research.md) D9） |
 | 3.4 | 列名桥接用 `@Column(name = "config_json")` 显式声明 | 不依赖 Hibernate 命名策略（既有 `SessionEntity` 同款做法） |
-| 3.5 | Repository MUST NOT 新增任何写入方法 | FR-014；继承来的 `save` 本节无调用方 |
+| 3.5 | Repository MUST NOT 新增任何写入方法 | FR-014；继承来的 `save` 本节无调用方。<br>**2026-10-15 补强②**：写入面走 CLI 的原生 JDBC（`WorkspaceDb.execute`），**不经过这个 Repository**，故本行**依然成立**——这不是「暂时没加」，是刻意的：轻命令不启 Spring 上下文，够不着 JPA Bean。`save` 现在**仍然**没有调用方 |
 | 3.6 | 本模块 MUST NOT 出现 `NotifyTarget` / `NotifyChannelAdapter` / `NotifyChannelRegistry` 的任何 import | 反向依赖的 grep 判据（3.1 的可执行形式） |
 
 ---
@@ -133,8 +142,12 @@ CREATE TABLE IF NOT EXISTS notify_channels (
 
 | 测试类 | 模块 | 覆盖 |
 | --- | --- | --- |
-| `JpaNotifyChannelRegistryTest` | `oryxos-tool` | §1.1 全部六行输入 + §2.3 / §2.5 / §2.6（mock `NotifyChannelRepository`） |
+| `JpaNotifyChannelRegistryTest` | `oryxos-tool` | §1.1 全部六行输入 + §2.3 / §2.6（mock `NotifyChannelRepository`） |
+| `JpaNotifyChannelRegistryEnvTest`（2026-10-15 补强② 新增） | `oryxos-tool` | §2.5 的读时解析：`url` 与 `config` 值里的占位都被替换；变量缺失 → 抛且消息只带变量名；无占位原样通过；`${A}-${B}` 混排；形状不合法（`${A B}`）原样保留；默认渠道也解析 |
 | `NotifyChannelRepositoryTest` | `oryxos-storage` | §4 的建表列齐备（`PRAGMA table_info`）+ §3.1/3.2 的存取往返 + §2.3 的默认渠道**不依赖插入顺序**（乱序插入后取到的仍是 `name` 最小者） |
+| `WorkspaceDbTest`（2026-10-15 补强② 新增） | `oryxos-cli` | 写入路径的地基：值里的单引号 / 双引号 / 反斜杠 / 换行 / 中文**原样进出**（证明走的是 `PreparedStatement` 绑定而非字符串拼接）、受影响行数、参数按位置绑定 |
+| `NotifyChannelRoundTripTest`（2026-10-15 补强② 新增，**最高价值**） | `oryxos-cli` | 写入面 → 读路径的**端到端**：跑真 `notify-channel add` 命令写真 SQLite → 起**真** Spring 上下文取 `NotifyChannelRegistry` Bean → 断言能解析出目标；占位符那条断言**抛异常**（证明读时解析真的接通了，而不是原样返回 `${...}`）。两边各自的单测都证明不了这个 |
+| `CliCommandTreeTest`（2026-10-15 补强② 新增） | `oryxos-cli` | 命令树形状：叶子命令**恰好**是契约 §1 的那 15 条（只断言「新增的在」而不钉总数，漏挂或误挂都能溜过去）；三个 `notify-channel` 叶子都挂上且都拿得到 `--help` |
 
 **`NotifyChannelRepositoryTest` 的基建**：沿用 `SessionRepositoryTest` 的既有做法——`@DataJpaTest` + `@AutoConfigureTestDatabase(replace = NONE)` + `@Transactional(propagation = NOT_SUPPORTED)` + `@DynamicPropertySource` 指向 SQLite 临时文件 + 读 classpath `db/schema.sql` 后 `split(";")` 逐条执行。
 

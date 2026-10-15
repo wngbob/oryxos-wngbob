@@ -2,6 +2,12 @@
 
 **Feature**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md) | **Created**: 2026-10-14
 
+> **修订记录（2026-10-15 补强②）**：本文件多处「本节**只读** / 无写入路径 / 表恒为空 / 不做 `${ENV_VAR}` 占位解析」的表述已被本次补强推翻。
+> **数据面本身一个字未改**——表结构、实体字段、Repository 方法、`config_json` 形状、默认渠道口径（按 `name` 升序第一个）全部原样。
+> 变的只有两件事：① 写入面由 CLI 三条轻命令提供（走原生 JDBC，**不经过 `NotifyChannelRepository`**），表不再恒为空；
+> ② `${ENV_VAR}` 占位**读时解析**已落地（库里存字面量占位符，解析渠道时才替换）。
+> 受影响各节就地加了带日期的修订注。
+
 本节的数据面很小：**一张表、一个实体、一个 Repository、一个值对象**（值对象骨架期已交付）。核心是「**表的一行 → 通知目标**」这条映射，以及它的三条确定性口径（默认渠道、`url` 键、`config_json` 形状）。
 
 ---
@@ -30,7 +36,8 @@ WebhookNotifyAdapter                 ← 一次 HTTP POST，content 走 JSON bod
 
 - `notify_channels` **不与 `sessions` / `tool_invocations` / `llm_calls` 建立任何外键**。渠道是**全局**的，审计表里的 `tool_invocations` 只记 `tool_name = notify` 与输入输出，**不记渠道地址**（FR-019）——所以「哪次推送发到了哪个群」在审计表里是查不到的，这是刻意的：查得到就意味着地址进了库里的自由文本字段。
 - `NotifyChannelEntity` **不是** `Profile` 的一部分，也**不进** `AGENT.md` frontmatter（`ProfileLoader.FORBIDDEN_KEYS` 已在代码层禁止）。Agent 侧只出现**注册名**。
-- 本节**只读**：没有任何代码路径写这张表（FR-014）。运行期它恒为空 → 「渠道未配置」是预期路径，不是异常路径。
+- ~~本节**只读**：没有任何代码路径写这张表（FR-014）。运行期它恒为空 → 「渠道未配置」是预期路径，不是异常路径。~~
+  **修订（2026-10-15 补强②）**：写入面已由 `oryxos notify-channel add|list|remove` 提供，表不再恒为空。**注册表接缝（`NotifyChannelRegistry`）本身仍只读**——写入走 CLI 的原生 JDBC，不经过它。「渠道未配置 → 明确报错」这条行为没变，只是它从「唯一可能的状态」变成「真没配时才出现」。
 
 ---
 
@@ -146,7 +153,17 @@ CREATE TABLE IF NOT EXISTS notify_channels (
 | `url` 键 | **恒定存在**于 `config` | 让适配器的契约可判定：只需处理「值是不是空白」，不必处理「键不存在」（D8） |
 | `config_json` 形状 | **JSON 对象、值均为字符串** | 对齐 `NotifyTarget.config` 的 `Map<String, String>`；静默转字符串会把「写错的配置」伪装成「能用的配置」（D7） |
 
-**本节 MUST NOT 做的事**：MUST NOT 在 `config` 里做 `${ENV_VAR}` 占位解析——A6 末段那段口径随第 26 节的写入路径一并定，本节**不假装实现了它**（仲裁 2 的连带影响，如实记录）。
+~~**本节 MUST NOT 做的事**：MUST NOT 在 `config` 里做 `${ENV_VAR}` 占位解析——A6 末段那段口径随第 26 节的写入路径一并定，本节**不假装实现了它**（仲裁 2 的连带影响，如实记录）。~~
+
+> **修订（2026-10-15 补强②，已落地）**：A6 末段那句「`url` 支持 `${ENV_VAR}` 占位」现已兑现，**口径定为「读时解析」**：
+>
+> - 库里存的是**字面量占位符**（`url` 列与 `config_json` 的值都可能含 `${VAR}`），凭证永不落库；
+> - **解析发生在映射的最后一步**——`url` 键叠加进 `config` 之前、`config_json` 每个值取出来之后，各跑一遍替换；
+> - 变量**未设置** → 抛 `IllegalStateException`，消息只带**变量名**与渠道名，MUST NOT 带凭证值（与 `ProfileLoader.resolveEnv` 同口径；与 `McpServerConfigLoader` 的「跳过整个 server + WARN」刻意不同，理由见 spec FR-029）；
+> - **形状不合法的占位**（`${A B}`、`${}`）原样保留、不报错——它不是占位符，只是普通字符串；
+> - 写入侧（`notify-channel add --url-env`）**落库前**校验变量名形状，避免写进一个永远匹配不上、会被当字面地址发出去的值（静默失败）。
+>
+> 上表三条确定性口径（默认渠道 / `url` 键恒定 / `config_json` 形状）**一条未变**——`url` 键仍恒定存在，只是它的**值**可能先经过占位替换。
 
 ---
 
@@ -172,11 +189,11 @@ public record NotifyTarget(String channelType, Map<String, String> config)
 | --- | --- | --- |
 | 建表（DDL） | ✅ 追加到 `schema.sql` | 本节 |
 | 读（按名 / 取默认） | ✅ `NotifyChannelRepository` + `JpaNotifyChannelRegistry` | 本节 |
-| 写（增 / 改 / 删） | ❌ 不做 | 第 26 节（Web 管理台 + `/api/v1/notify-channels`） |
+| 写（增 / 改 / 删） | ❌ 不做（**接缝仍只读**） | ✅ **2026-10-15 补强②**：CLI `notify-channel add|remove`（轻命令，原生 JDBC，**不经过这个 Repository**）；REST + 管理台仍归第 26 节 |
 | 从文件导入 | ❌ 不做（A6 的 yaml 口径判为旧口径） | 第 26 节 |
-| `${ENV_VAR}` 占位解析 | ❌ 不做 | 第 26 节（随写入路径） |
+| `${ENV_VAR}` 占位解析 | ❌ 不做 | ✅ **2026-10-15 补强②**：**读时解析**已落地（见 §5 末的修订注）；写入侧的变量名形状校验在 CLI |
 
-**运行期表的预期状态**：**空**。因为本节没有写入路径，`resolve` 在任何真实运行里都会走到「未配置任何通知渠道」这条报错分支。这不是缺陷，是 FR-014 的直接结果——它也让「渠道未配置必须明确报错」这条需求在本节就有了真实的可观测证据（[quickstart.md](quickstart.md) §4）。
+**运行期表的预期状态（2026-10-15 补强② 修正）**：**不再恒为空**。用 `oryxos notify-channel add` 配了渠道，`resolve` 就返回真实目标、`notify` 真能推；**没配**才走「未配置任何通知渠道」这条报错分支。原文写「本节没有写入路径，`resolve` 在任何真实运行里都会走到报错分支」——那句已失效，且它正是本次补强要修的问题：能力 100% 死掉却被记成「预期状态」。
 
 ---
 
@@ -184,5 +201,5 @@ public record NotifyTarget(String channelType, Map<String, String> config)
 
 - 渠道数量：**个位数**（一个企业几十个群已是上限）。全表扫描在任何实现下都不构成问题，默认渠道的派生查询下推 SQL 只是良好习惯。
 - `config_json` 长度：小（几个键值对）；`TEXT` 类型留足余量。
-- **无并发写入**：本节只读，且核心阶段 SQLite 走单连接池（`pool=1`），不存在写冲突。
+- **无并发写入**：注册表接缝仍只读，写入面是 CLI 的短事务（一条 `INSERT OR IGNORE` / `DELETE`），且核心阶段 SQLite 走单连接池（`pool=1`），不存在写冲突。
 - **无索引需求**：`name` 是主键（自带索引），本节只有按 `name` 的两种查法，都走主键。

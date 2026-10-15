@@ -4,6 +4,11 @@
 
 本节交付的是**库代码 + 单测**，不是可运行的功能（工具进不了容器、注册表运行期恒为空——见 [plan.md](plan.md) 的「三处有界的新增」）。所以本文件的验证路径与前面几节不同：**主路径是「跑测试 + 核对契约存在性」**，端到端的手工验收要等第 24 节接线（§5 给出那一项）。
 
+> **修订记录（2026-10-15 补强②）**：上面这段描述的是**本节交付时**的状态，现已全部失效——工具自第 20 节起已进容器（`PermissiveSandbox` 临时装配），
+> 注册表也不再恒为空（写入面由 `oryxos notify-channel add|list|remove` 提供）。**验证主路径因此变了**：日常路径是**配一个渠道 → `chat` 里真推 → 消息进群**，
+> 见 [manual-test-guide.md](manual-test-guide.md) **Step 5**。本文件下面各节的「跑测试 + 核对契约存在性」仍然有效，只是不再是唯一路径。
+> 另：下面 Q&A 里那两条「为什么用不了 / 为什么恒为空」也已失效，各加了修订注。
+
 ---
 
 ## 0. 环境准备
@@ -222,7 +227,7 @@ java -jar oryxos-boot/target/oryxos.jar --version   # 预期：正常打印版�
 
 | # | 人工项 | 为什么机器判不了 | 怎么做 |
 | --- | --- | --- | --- |
-| 5.1 | **真实 webhook 送达** | 需要企业真实的群机器人地址，且是**外呼**——单测纪律禁止访问外网 | 第 24 节接线后：注册表插一行（`name` / `type=webhook` / `url=<真地址>`），跑一次 `notify`。**⚠️ 已人工实测（2026-10-14）**：对**通用 webhook 接收端**（webhook.site / 自建端点）送达成立；对 **IM 群机器人不成立**——它们要 `msg_type`/`msgtype` 方言，收到通用报文回 `HTTP 200` + 业务错误码，而适配器按状态码判成功 → 假报「已推送」。已按 FR-003 边界记为已知边界，详见 [manual-test-guide.md](manual-test-guide.md) §4 与 [acceptance-report.md](acceptance-report.md) §7。**本节的替代证据**：MockWebServer 已证明「POST 发出去了、body 里有 content、地址来自配置」 |
+| 5.1 | **真实 webhook 送达** | 需要企业真实的群机器人地址，且是**外呼**——单测纪律禁止访问外网 | 第 24 节接线后：注册表插一行（`name` / `type=webhook` / `url=<真地址>`），跑一次 `notify`。**⚠️ 已人工实测（2026-10-14）**：对**通用 webhook 接收端**（webhook.site / 自建端点）送达成立；对 **IM 群机器人不成立**——它们要 `msg_type`/`msgtype` 方言，收到通用报文回 `HTTP 200` + 业务错误码，而适配器按状态码判成功 → 假报「已推送」。已按 FR-003 边界记为已知边界，详见 [manual-test-guide.md](manual-test-guide.md) 附录 A.2 与 [acceptance-report.md](acceptance-report.md) §7。**本节的替代证据**：MockWebServer 已证明「POST 发出去了、body 里有 content、地址来自配置」 |
 | 5.2 | **接口中立性思想实验** | 属设计判断，非可断言事实 | 读 [contracts/notify-outbound.md](contracts/notify-outbound.md) §1，自问：**若现在要加一个飞书专用渠道，要不要改 `NotifyChannelAdapter` 或 `NotifyTools`？** 正确答案是「都不用，只新增一个 `implements NotifyChannelAdapter` 的类 + 在注册表里配 `type`」。若你的答案是需要改接口，说明接口漏了某一档实现的细节 |
 | 5.3 | **前序节回归绿** | 机器可判（§4 的命令），但**要你确认这是全量而非抽样** | 跑 §4 的 `./mvnw -o clean verify`，确认是全量 |
 | 5.4 | **顺序不变量的可信度** | `InOrder` 断言已机器化，但「这条断言本身写对了没」要人看一眼 | 读 `NotifyToolsTest` 里那条 `@DisplayName("发送前必须先过白名单校验")`，确认用的是 `InOrder` 而非两条独立的 `verify`——**两条独立 `verify` 在顺序写反时也会通过**（[contracts/notify-outbound.md](contracts/notify-outbound.md) §3.3） |
@@ -233,9 +238,14 @@ java -jar oryxos-boot/target/oryxos.jar --version   # 预期：正常打印版�
 
 **Q：为什么跑完本节，`notify` 工具在 `oryxos chat` 里还是用不了？**
 A：本节**零装配**——工具没进 Spring 容器，也没有 `ToolRegistry` 消费它的 `@Tool` 注解（注册机制归第 20 节、`Sandbox` 实现归第 23/24 节）。这是 [plan.md](plan.md) 仲裁 4 的直接结果，不是缺陷。可演示的那一天是第 24 节接线之后。
+> **2026-10-15 补注**：第 20 节已把 13 个工具装进容器（沙箱挂的是临时实现 `PermissiveSandbox`），所以 `notify` **已经能调**了。剩下的最后一环是**渠道从哪来**——补强② 补上了，见下一问。
 
 **Q：为什么注册表运行期恒为空？**
 A：本节不引入写入路径（FR-014 / 仲裁 2）——A6 的 `notify_channels.yaml` 启动导入判为旧口径，写入路径归第 26 节。所以「渠道未配置 → 明确报错」在任何真实运行里都会走到，这是**预期行为**，也让 FR-006 在本节就有了真实的可观测证据。
+> **2026-10-15 补强② 修正**：这个挂账**是错的**——第 26 节的管理台明确「这一版只读」，10 个端点里没有一个与渠道写入相关，所以「归第 26 节」等于「永远不做」，`notify` 在真实部署里 100% 失败却被记成「预期状态」。
+> 现已由 CLI 三条轻命令 `oryxos notify-channel add|list|remove` 补上，**表不再恒为空**：
+> 配了渠道 `notify` 就真能推；**没配**才走「未配置任何通知渠道」这条报错分支（那句文案现在会直接告诉你该敲哪条命令）。
+> `${ENV_VAR}` 占位也一并落地为**读时解析**——`--url-env FEISHU_HOOK_URL` 入库的是字面量 `${FEISHU_HOOK_URL}`，凭证不落库。
 
 **Q：`WebhookNotifyAdapter` 为什么不是 `WebhookNotifyAdapter(RestClient)`？**
 A：FR-021 要求推送**本身**有界，把超时责任推给注入方会让它退化成「谁装配谁负责」。详见 [plan.md](plan.md) 偏离 ③ 与 [research.md](research.md) D2。

@@ -5,6 +5,16 @@
     <!-- 开发环境(默认):彩色 console pattern,便于本地调试(用 logback 原生颜色转换器,不依赖 Spring Boot 扩展) -->
     <springProfile name="!prod">
         <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <!--
+              target=System.err 是**故意的**,不是 logback 的默认值(默认打 System.out),删掉会让下面这个问题原样回来:
+              CLI 命令的输出走 System.out.println,日志也走 System.out,两者同一条流。第 20 节把 tool list 从轻命令
+              改成重命令(要连 MCP server 才能列出工具清单)后,实测表格前有 24 行 Spring/Hibernate 启动日志 ——
+              `oryxos tool list | head -20` 一行工具都打不出来,`| grep` 之类的管道消费方也全被污染。
+              按 Unix 惯例分开:数据走 stdout、诊断走 stderr。于是管道只拿到命令输出,`2>/dev/null` 可静音,
+              终端上两股都还看得见(含 PermissiveSandbox 那条**故意**打的 WARN,它 MUST NOT 被静音)。
+              prod 档(JSON_CONSOLE)保持 System.out 不动 —— 容器日志采集侧读的是 stdout,不能跟着改。
+            -->
+            <target>System.err</target>
             <encoder>
                 <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%5p) --- [%15.15t] %cyan(%-40.40logger{39}) : [%X{traceId:-}] %m%n%ex</pattern>
                 <charset>UTF-8</charset>

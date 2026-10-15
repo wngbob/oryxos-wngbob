@@ -34,10 +34,13 @@ import io.oryxlabs.oryxos.tool.interaction.InteractionTools;
 import io.oryxlabs.oryxos.tool.interaction.UserInteraction;
 import io.oryxlabs.oryxos.tool.mcp.McpClientService;
 import io.oryxlabs.oryxos.tool.mcp.McpServerConfigLoader;
+import io.oryxlabs.oryxos.tool.notify.FeishuNotifyAdapter;
 import io.oryxlabs.oryxos.tool.notify.JpaNotifyChannelRegistry;
 import io.oryxlabs.oryxos.tool.notify.NotifyChannelAdapter;
 import io.oryxlabs.oryxos.tool.notify.NotifyChannelRegistry;
 import io.oryxlabs.oryxos.tool.notify.NotifyTools;
+import io.oryxlabs.oryxos.tool.notify.RoutingNotifyChannelAdapter;
+import io.oryxlabs.oryxos.tool.notify.WeComNotifyAdapter;
 import io.oryxlabs.oryxos.tool.notify.WebhookNotifyAdapter;
 import io.oryxlabs.oryxos.tool.registry.ToolRegistry;
 import io.oryxlabs.oryxos.tool.sandbox.PermissiveSandbox;
@@ -46,6 +49,7 @@ import io.oryxlabs.oryxos.tool.search.DuckDuckGoSearchProvider;
 import io.oryxlabs.oryxos.tool.search.SearchProvider;
 import io.oryxlabs.oryxos.tool.search.TavilySearchProvider;
 import io.oryxlabs.oryxos.tool.search.WebSearchTools;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -63,7 +67,7 @@ import org.springframework.context.annotation.Configuration;
  * 16/17 节的测试全部手工 {@code new}）。「谁被装配、装配成什么」只在这一处可见，第 20 / 22 / 26 节加 Bean 时改这一个类； 散到各模块就变成多处真相，且
  * core 会反向依赖 Spring 的装配语义。
  *
- * <p><b>12 个命令类 MUST NOT 自己 {@code new} 服务</b>：重命令从上下文取 Bean；轻命令走 {@code workspace/} 子包里的文件与 JDBC
+ * <p><b>15 个命令类 MUST NOT 自己 {@code new} 服务</b>：重命令从上下文取 Bean；轻命令走 {@code workspace/} 子包里的文件与 JDBC
  * 辅助类（它们根本不启动上下文）。
  */
 @Configuration
@@ -264,24 +268,52 @@ public class CliAssemblyConfiguration {
   }
 
   /**
-   * 通知渠道的推送实现（第 19 节交付物，本节完成装配；contracts/assembly.md §1.1 第 2 行）。
+   * 通知渠道的推送实现（第 19 节交付物，本节完成装配；2026-10-15 补强改为按 type 分派）。
    *
-   * <p><b>刻意不声明 {@code RestClient} Bean</b>：{@link WebhookNotifyAdapter} 的无参构造内部自建带 10 秒有界超时的
-   * {@code RestClient}。声明一个 {@code RestClient} Bean 会让人以为它可被注入替换，而第 19 节的 javadoc
-   * 明确把超时收口在类内（FR-021）。
+   * <p><b>「type → 实现」的映射表刻意写在这里</b>：{@link RoutingNotifyChannelAdapter} 保持厂商无关（源码里不出现任何一家渠道的名字），
+   * 具体实现的知识只落在装配点——与 {@link NotifyTools}「三个参数全是接口类型」同一条纪律。
    *
-   * @return 通用 webhook 推送器
+   * <p><b>2026-10-15 修订（补强③）</b>：原文写「将来加第三家（企微 / 钉钉）只动这个方法」——<b>企微已按此路径加上</b>，改动确实只发生在本方法 （加一行
+   * {@code put} 与一个 import）。钉钉仍待。原文保留以留痕。
+   *
+   * <p><b>{@link FeishuNotifyAdapter} 与 {@link WeComNotifyAdapter} 刻意不单独声明 Bean</b>：它们和通用档都实现
+   * {@link NotifyChannelAdapter}，两个以上 Bean 会让 {@link NotifyTools} 的注入当场歧义。方言档在方法体内 new
+   * 出来交给路由持有——容器里 {@code NotifyChannelAdapter} 类型的 Bean 恒为一个（由 {@code NotifyAssemblyTest} 起真上下文钉死）。
+   *
+   * <p><b>别名 {@code lark} 指向同一个实例</b>：Lark 是飞书的国际版，两者 webhook 协议与报文完全一致，各写一个类只会得到两份要同步维护的方言。
+   * 企微<b>没有</b>这样的别名——它和飞书的报文形状只差一个字段名（{@code msgtype} vs {@code msg_type}），是镜像而不是同一份。
+   *
+   * <p><b>刻意不声明 {@code RestClient} Bean</b>：两档实现的无参构造内部各自自建带 10 秒有界超时的 {@code RestClient}。声明一个
+   * {@code RestClient} Bean 会让人以为它可被注入替换，而第 19 节的 javadoc 明确把超时收口在类内（FR-021）。
+   *
+   * <p><b>{@code Map} 必须在本方法体内显式构造</b>：写成 {@code @Bean} 方法的 {@code Map<String,
+   * NotifyChannelAdapter>} 参数， Spring 会按类型收集容器里所有候选 Bean——那正是 {@code providerMap} 需要
+   * {@code @Qualifier} 的那个坑。
+   *
+   * @return 按渠道类型分派的推送器
    */
   @Bean
   public NotifyChannelAdapter notifyChannelAdapter() {
-    return new WebhookNotifyAdapter();
+    Map<String, NotifyChannelAdapter> adapterByType = new LinkedHashMap<>();
+    adapterByType.put("webhook", new WebhookNotifyAdapter());
+    // 同一个实例挂两个键：飞书与 Lark 是同一套协议
+    NotifyChannelAdapter feishu = new FeishuNotifyAdapter();
+    adapterByType.put("feishu", feishu);
+    adapterByType.put("lark", feishu);
+    // 企微是独立的方言档，不与飞书共用实例：两者报文形状只差一个字段名，是镜像不是同一份
+    adapterByType.put("wecom", new WeComNotifyAdapter());
+    return new RoutingNotifyChannelAdapter(adapterByType);
   }
 
   /**
    * 通知渠道注册表（第 19 节交付物，本节完成装配）。
    *
-   * <p><b>本节只读</b>：注册表的写入路径归第 26 节，故 {@code notify_channels} 表在运行期恒为空，{@code notify} 工具此刻
-   * 必然报「未配置任何通知渠道」——这是预期状态，不是缺陷。
+   * <p><b>本节只读</b>：这个 Bean 只解析渠道，不写渠道。渠道的写入面是 {@code oryxos notify-channel add|remove}—— 三条**轻命令**，
+   * 走原生 JDBC 直写表（不启 Spring，因此看不到本上下文、也拿不到这个 Bean）。
+   *
+   * <p><b>2026-10-15 修订（补强②）</b>：原文写「写入路径归第 26 节，故 {@code notify_channels} 表在运行期恒为空， {@code notify}
+   * 工具此刻必然报『未配置任何通知渠道』——这是预期状态，不是缺陷」。前半句的挂账是错的（第 26 节的管理平台明确「这一版只读」），
+   * 后半句的后果也<b>不再成立</b>：表不再恒为空，配好渠道后 {@code notify} 真能推出去。原文把「能力 100% 不可用」 记成「预期状态」，是这次补强的直接起因。
    *
    * @param notifyChannelRepository {@code notify_channels} 表的存取出口
    * @return 从表读渠道的注册表

@@ -2,6 +2,11 @@
 
 **Branch**: `class-19` | **Date**: 2026-10-14 | **Spec**: [spec.md](spec.md)
 
+> **修订记录（2026-10-15 补强②）**：本文件多处「无写入路径 / 表恒为空 / 占位解析归第 26 节」的表述已被本次补强推翻。
+> 写入面改由 CLI 三条轻命令 `notify-channel add|list|remove` 提供（走原生 JDBC，不启 Spring 上下文，**不经过 `NotifyChannelRegistry` 接缝**），
+> 且 `${ENV_VAR}` **读时解析**已落地。**本节的交付物、测试分层、装配边界一条未变**——补强是往既有结构上加半条边，不是改结构。
+> 受影响各节就地加了带日期的修订注。
+
 **Input**: Feature specification from `specs/004-notify-outbound/spec.md`（第 19 节课件：`docs/class/第19节：Notify 模块 原理解析、实现与代码讲解.md`）
 
 **Note**: 本文件由 `/speckit-plan` 生成。本节是核心阶段「能力四（Plugin Tool）」的前置切片，上游为 `specs/000-runtime-kernel`（契约与审计地基）、`specs/001-llm-provider`、`specs/002-react-loop`、`specs/003-cli-session`。章节依据 `docs/TechnicalSolution.md` §6.8（通知推送）、§9.2（`notify_channels` 表）。
@@ -31,7 +36,7 @@
 - 测试：`spring-boot-starter-test`（JUnit 5 + Mockito + AssertJ，**本节新增到 `oryxos-tool` 的 test scope**——该模块此前没有任何测试依赖）、`com.squareup.okhttp3:mockwebserver3:5.5.0`（test scope，**必须写版本号**，无 BOM 托管）（仲裁 7）
 - **★ `org.jetbrains.kotlin:kotlin-stdlib:2.1.21`（test scope + 模块级 `dependencyManagement`）**——T001 实测踩到的坑，**软门禁 ⑥ 报批项**（用户裁决「钉 2.1.21」）：`spring-boot-dependencies` 把 `kotlin.version` 钉在 `1.9.25` 并托管 `kotlin-stdlib`，**覆盖**了 `okhttp-jvm:5.5.0` 自己声明的 `2.1.21`，而本机仓库没有 `1.9.25` → 离线构建 `Could not resolve kotlin-stdlib:jar:1.9.25` **BUILD FAILURE**。且 `okhttp-jvm:5.5.0` 由 Kotlin 2.1 编译，配 `1.9.25` stdlib 有运行期元数据不兼容风险——`2.1.21` 才是它真正需要的版本。覆盖必须落在 `dependencyManagement` 层（只写直接依赖虽能赢仲裁，但图里仍留一个 `1.9.25` 节点、每次构建刷警告）。**这行看着多余，删了构建会红**（[research.md](research.md) 依赖核实记录）
 
-**Storage**: SQLite `.oryxos/oryxos.db`；`notify_channels` 表**本节新建**（列名与语义逐字照 `specs/000-runtime-kernel/data-model.md` A6 抄，建表脚本手工维护在 `oryxos-storage/src/main/resources/db/schema.sql`）。运行期该表**恒为空**——本节不引入写入路径（仲裁 2），故「渠道未配置 → 明确报错」是**预期**行为
+**Storage**: SQLite `.oryxos/oryxos.db`；`notify_channels` 表**本节新建**（列名与语义逐字照 `specs/000-runtime-kernel/data-model.md` A6 抄，建表脚本手工维护在 `oryxos-storage/src/main/resources/db/schema.sql`）。~~运行期该表**恒为空**——本节不引入写入路径（仲裁 2），故「渠道未配置 → 明确报错」是**预期**行为~~ → **2026-10-15 补强② 修正**：写入面已由 `oryxos notify-channel add|list|remove` 补上（轻命令，原生 JDBC），表不再恒为空；**表结构与列口径一个字未改**
 
 **Testing**: JUnit 5 + Mockito + AssertJ + MockWebServer；**4 个测试类、全部不碰网络**（假 webhook 起在 `localhost`）：
 - `WebhookNotifyAdapterTest`（`oryxos-tool`，MockWebServer）——课件 harness **第一批**，本节立即可跑
@@ -52,7 +57,7 @@
 - MUST NOT 修改骨架期已交付的两份契约（`NotifyChannelAdapter` / `NotifyTarget` 的签名与课件逐字一致）
 - MUST NOT 修改 `Profile` / `ProfileLoader` / `ProfileContext` 的既有签名与行为（FR-015）；`notify_channels` MUST NOT 出现在 `AGENT.md` frontmatter
 - MUST NOT 新增任何 Spring 装配（FR-016）——两个类不带 `@Component`，`CliAssemblyConfiguration` 一行不改；MUST NOT 造「全放行」的占位沙箱
-- MUST NOT 引入渠道的写入路径（yaml 导入 / CRUD / 工作区模板文件）（FR-014）——本节的解析是**只读**的
+- MUST NOT 引入渠道的写入路径（yaml 导入 / REST CRUD / 工作区模板文件）（FR-014）——**注册表接缝**的解析是**只读**的。**2026-10-15 补强② 修订**：「写入路径归第 26 节」被推翻，最小写入面落在 CLI 三条轻命令上（走原生 JDBC，不经过接缝）；上面排除的三项（yaml / REST CRUD / 工作区模板）**仍然不做**
 - MUST NOT 引入响应式编程或自建线程池（章程原则 I / FR-020）——不写 `Flux` / `CompletableFuture`
 - MUST NOT 启用 Spring AI 自动工具执行（章程原则 III）——`@Tool` 注解本节是**惰性的**，没有任何 `ToolRegistry` 消费它
 - MUST NOT 出现明文凭证，MUST NOT 让渠道地址（含 URL 里的 token）出现在对话内容、结构化日志、报错与命令输出中（FR-019）
@@ -68,7 +73,7 @@
 | 原则 | 本节的落实 | 结论 |
 | --- | --- | --- |
 | I. JDK 21 + SB 3.x 单体、多模块、单二进制；同步阻塞，MUST NOT 响应式 | 不新增模块（9 个模块骨架不变）；推送是一次同步阻塞的 `RestClient` 调用，由 virtual thread 承载；无响应式、无自建线程池、无 `CompletableFuture`。发行物仍只有 `oryxos-boot/target/oryxos.jar` 一个，且本节**不新增任何工件**（两条新依赖边都是既有传递边的显式化） | ✅ |
-| II. 只交付运行时内核；MUST NOT 引入未被证实的抽象（YAGNI） | 只做课件点名的 4 个类 + 表；不做重试/退避/投递回执、不做邮件短信、不做富文本卡片、不做渠道 CRUD、不做逐家签名算法（spec「明确不做」11 条逐项照搬）。`NotifyChannelRegistry` 接缝是**为满足 FR-006/FR-011 所必需**、且已按软门禁 ① 报批，不是预造抽象 | ✅ |
+| II. 只交付运行时内核；MUST NOT 引入未被证实的抽象（YAGNI） | 只做课件点名的 4 个类 + 表；不做重试/退避/投递回执、不做邮件短信、不做富文本卡片、不做渠道 CRUD、~~不做逐家签名算法~~（spec「明确不做」11 条逐项照搬）。`NotifyChannelRegistry` 接缝是**为满足 FR-006/FR-011 所必需**、且已按软门禁 ① 报批，不是预造抽象。**2026-10-15 补强修订**：「不做逐家签名算法」已被推翻——飞书档做了可选 HMAC 签名（FR-024），因为「不做签名」的直接后果是飞书开了签名校验的机器人**根本推不进去**，这不是 YAGNI 而是必需；其余各项仍不做 | ✅ |
 | III. Agent 引擎自实现，Spring AI 只用一半；自动 tool 执行 MUST 被禁用 | 只用到 `@Tool` **注解**（章程允许的三件事之一：schema 生成）；本节**没有任何** `ToolRegistry` / 自动执行路径——注解是惰性的，注册归第 20 节。`NotifyTools` 是普通 Java 方法，由第 20 节的 `ToolExecutor` 链路调度 | ✅ |
 | IV. Agent 目录不是 Tool；Skill 绑定真相源是软连接、MUST NOT 进 frontmatter | 本节**零接触** `AGENT.md` / `AgentLoader` / `ContextLoader`；`notify_channels` 不进 frontmatter（既有禁令保持有效，且本节不改 `ProfileLoader`） | ✅ |
 | V. Tool 体系统一抽象、单一模块 | 通知工具落 `oryxos-tool` 的 `notify` 包，**不新建模块、不拆模块**；`NotifyTools` 走第 20 节的统一抽象路径（本节先以库代码交付） | ✅ |
@@ -188,9 +193,9 @@ README.md / website/**                                                          
 | --- | --- | --- |
 | `@Tool` 的注册机制（谁扫描、谁包装成统一工具抽象） | 第 20 节（`ToolRegistry`） | 注解已按课件加上（仲裁 5），**惰性**；`NotifyTools` 的签名已按第 20 节可包装的形状定死 |
 | `Sandbox` 的实现（`WhitelistSandbox`） | 第 23 / 24 节 | 调用位已在 `NotifyTools` 里就位：`enforce` 先于 `send`，顺序不变量已用 `InOrder` 钉死；本节用替身验证 |
-| `notify_channels` 的**写入路径**（CRUD / 工作区模板 / yaml 导入） | 第 26 节（Web 管理台 + `/api/v1/notify-channels`） | 表与存取已就位（只读）；运行期表恒为空是**预期**行为 |
+| `notify_channels` 的**写入路径** | ✅ **2026-10-15 补强② 已补**：CLI `notify-channel add\|list\|remove`（轻命令，原生 JDBC）；yaml 导入 / 工作区模板 / REST CRUD **仍不做**，REST + 管理台归第 26 节 | 表与存取已就位（接缝只读） |
 | 通知相关 Bean 的 Spring 装配 | 第 24 节 | 交接清单（构造签名 + 依赖 + 前置条件）已写死在 [contracts/assembly-handoff.md](contracts/assembly-handoff.md) |
-| `url` 的 `${ENV_VAR}` 占位解析 | 第 26 节（随写入路径一并定） | **本节不假装实现了它**（仲裁 2 的连带影响，如实记录） |
+| `url` 的 `${ENV_VAR}` 占位解析 | ✅ **2026-10-15 补强② 已补**：读时解析，落地在 `JpaNotifyChannelRegistry` | — |
 
 另有两处**非接缝**的留白，本节明确不做并已记入 [research.md](research.md)：重定向的逐跳白名单复检（D5，需 `Sandbox` 实现）、对端业务错误码的解析（D4，属扩展阶段的专用渠道对接）。
 

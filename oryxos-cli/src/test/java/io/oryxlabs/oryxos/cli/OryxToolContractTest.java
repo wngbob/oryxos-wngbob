@@ -4,14 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.oryxlabs.oryxos.core.tool.OryxTool;
 import io.oryxlabs.oryxos.tool.registry.ToolRegistry;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -32,6 +31,14 @@ import org.springframework.context.ConfigurableApplicationContext;
 class OryxToolContractTest {
 
   private static ConfigurableApplicationContext context;
+
+  /**
+   * 临时库目录，由 JUnit 注入并**由 JUnit 删除**（静态字段 → 每个测试类一份，在静态初始化器之后、{@code @BeforeAll} 之前注入）。
+   *
+   * <p><b>MUST NOT 换回 {@code Files.createTempFile}</b>：那样没人删，每跑一次就往 {@code /tmp} 留一个 {@code .db}
+   * 文件（本类曾如此，累计 20 个）。
+   */
+  @TempDir static Path tempDir;
 
   private static Path dbFile;
 
@@ -62,11 +69,7 @@ class OryxToolContractTest {
   /** 惰性启动：{@code @MethodSource} 何时被求值不影响到这里的结果。 */
   private static synchronized ToolRegistry registry() {
     if (context == null) {
-      try {
-        dbFile = Files.createTempFile("oryxos-contract-", ".db");
-      } catch (IOException e) {
-        throw new IllegalStateException("建不了临时库文件", e);
-      }
+      dbFile = tempDir.resolve("oryxos.db");
       context = CliTestContext.boot(dbFile);
     }
     return context.getBean(ToolRegistry.class);
