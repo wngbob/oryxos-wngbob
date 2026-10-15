@@ -61,9 +61,39 @@
             <artifactId>spring-web</artifactId>
         </dependency>
 
+        <!-- MCP Java SDK（第 20 节）。版本写死不由 BOM 托管：Spring Boot BOM 不管这个 groupId，
+             而 mcp-core 与 mcp-json-jackson2 必须同版本（前者按 ServiceLoader 找后者提供的 mapper 实现）。
+             两个坐标缺一不可——只加 mcp-core 会让启动抛 ServiceConfigurationError（Error，不是降级）：
+             mcp-core 里没有 META-INF/services/io.modelcontextprotocol.json.McpJsonMapperSupplier，
+             而 StdioClientTransport 的唯一公开构造器要求传入 McpJsonMapper。
+             发行物代价：fat JAR 新增 5 个工件（mcp-core / mcp-json-jackson2 / json-schema-validator /
+             com.ethlo.time:itu / jackson-dataformat-yaml），均已核实存在于本地仓库，离线构建不受影响。 -->
+        <dependency>
+            <groupId>io.modelcontextprotocol.sdk</groupId>
+            <artifactId>mcp-core</artifactId>
+            <version>0.18.3</version>
+        </dependency>
+        <dependency>
+            <groupId>io.modelcontextprotocol.sdk</groupId>
+            <artifactId>mcp-json-jackson2</artifactId>
+            <version>0.18.3</version>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+
+        <!--
+          @SuppressFBWarnings：只为就地豁免两处 SpotBugs 误报——ShellTools 的 COMMAND_INJECTION（argv 直传不经
+          Shell、argv[0] 已过白名单）、AnnotatedToolAdapter/McpToolAdapter 的「按引用持有注入的协作对象」。
+          版本由父 pom 的 dependencyManagement 托管；纯注解、provided 作用域，不进产物、不引入运行时依赖
+          （与 oryxos-core / oryxos-cli 同一做法）。
+        -->
+        <dependency>
+            <groupId>com.github.spotbugs</groupId>
+            <artifactId>spotbugs-annotations</artifactId>
+            <scope>provided</scope>
         </dependency>
 
         <dependency>

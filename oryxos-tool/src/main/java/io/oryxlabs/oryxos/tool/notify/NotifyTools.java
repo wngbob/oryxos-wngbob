@@ -5,6 +5,7 @@ import io.oryxlabs.oryxos.tool.sandbox.ActionType;
 import io.oryxlabs.oryxos.tool.sandbox.Sandbox;
 import io.oryxlabs.oryxos.tool.sandbox.SandboxAction;
 import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 
 /**
  * 内置通知工具：模型只说「推什么」和「推到哪个渠道名」，剩下的由底座完成。
@@ -47,12 +48,22 @@ public class NotifyTools {
    *
    * <p><b>方法名与参数名与课件逐字一致</b>：参数名会进 {@code @Tool} 生成的 JSON Schema，是模型看得见的部分， 改名等于改模型的行为。
    *
+   * <p><b>{@code channel} 必须显式标 {@code required = false}</b>（第 20 节改造点）：{@code JsonSchemaGenerator}
+   * 对没有 {@code @ToolParam} 注解的参数一律判为必填，不加这个注解，JSON Schema 会把 {@code channel} 列进 {@code
+   * required}——「渠道名可选」在模型可见层当场不成立（模型不会主动省略它）。运行期行为一直是对的（{@code null} / 空串 / 纯空白都退回默认渠道），坏的是 schema
+   * 层。第 19 节 {@code @Tool} 还是惰性的、改了无从验证，故留到本节注册机制接上时一并补。
+   *
+   * <p><b>{@code name} 显式写出来</b>：不写时 {@code AnnotatedToolAdapter} 回退用方法名，结果**恰好**也是 {@code
+   * notify}，所以运行期行为一模一样。写出来是因为「工具名是模型引用它的唯一凭据，一旦交付不得改」——靠回退，将来谁把方法重命名成 {@code push} 就静默改了工具名， 而
+   * {@code @Tool(name = ...)} 把工具名和方法名解耦，重命名方法不再有这层隐患。
+   *
    * @param content 要推送的正文
    * @param channel 渠道注册名；不传时用默认渠道
    * @return 推送结果
    */
-  @Tool(description = "把一条消息推送到已注册的通知渠道（不传渠道名时用默认渠道）")
-  public ToolResult notify(String content, String channel) {
+  @Tool(name = "notify", description = "把一条消息推送到已注册的通知渠道（不传渠道名时用默认渠道）")
+  public ToolResult notify(
+      String content, @ToolParam(description = "渠道注册名；不传时用默认渠道", required = false) String channel) {
     NotifyTarget target = registry.resolve(channel);
     // 顺序钉死：先过白名单，再发。校验不通过时一次请求都不发
     sandbox.enforce(new SandboxAction(ActionType.HTTP_REQUEST, target.config().get("url")));

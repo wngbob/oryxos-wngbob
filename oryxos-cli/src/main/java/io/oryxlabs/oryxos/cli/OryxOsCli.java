@@ -34,8 +34,9 @@ import picocli.CommandLine.Command;
  * 个子命令见 {@code specs/003-cli-session/contracts/cli-surface.md} §1。
  *
  * <p><b>命令按轻重分流</b>（FR-003）：轻命令（{@code init} / {@code status} / {@code profile *} / {@code provider
- * list} / {@code tool list} / {@code session list}）不启动 Spring 上下文，直接走文件与 SQLite，秒回；重命令（{@code chat}
- * / {@code serve} / {@code gateway}）才启动 Spring 上下文。判断标准只有一条： 这条命令要不要调模型、跑引擎。
+ * list} / {@code session list}）不启动 Spring 上下文，直接走文件与 SQLite，秒回；重命令（{@code chat} / {@code serve} /
+ * {@code gateway} / {@code tool list}）才启动 Spring 上下文。判断标准只有一条： 这条命令要不要调模型、跑引擎。{@code tool list} 自第
+ * 20 节起归重——列出 MCP 工具必须连上 server（contracts/assembly.md §5.3）。
  *
  * <p><b>命令树在这里显式组装，不用 {@code @Command(subcommands = ...)}</b>：轻命令的构造函数要收 {@link Workspace}
  * （装配只此一处，命令类自己不去猜工作区在哪），而注解只能写类字面量、写不了实例。显式 {@code addSubcommand} 是 唯一既保留构造注入、又不引入反射工厂的写法。
@@ -92,7 +93,7 @@ public final class OryxOsCli implements Runnable {
     root.addSubcommand("gateway", new GatewayCommand());
     root.addSubcommand("profile", profileGroup(workspace));
     root.addSubcommand("provider", providerGroup(workspace));
-    root.addSubcommand("tool", toolGroup(workspace));
+    root.addSubcommand("tool", toolGroup());
     root.addSubcommand("session", sessionGroup(workspace));
     // 运行错误只打消息、不打堆栈（FR-018 / SC-007）；参数错误的退出码 2 与用法打印仍走 Picocli 默认的
     // IParameterExceptionHandler——两者互不覆盖
@@ -113,8 +114,14 @@ public final class OryxOsCli implements Runnable {
         .addSubcommand("list", new ProviderListCommand(workspace));
   }
 
-  private static CommandLine toolGroup(Workspace workspace) {
-    return new CommandLine(new ToolCommand()).addSubcommand("list", new ToolListCommand(workspace));
+  /**
+   * {@code tool} 分组。
+   *
+   * <p><b>{@code tool list} 不接 {@link Workspace}</b>：它自第 20 节起是重命令，工作区在 Spring 上下文里装配（与 {@code
+   * chat} / {@code serve} / {@code gateway} 同款）。
+   */
+  private static CommandLine toolGroup() {
+    return new CommandLine(new ToolCommand()).addSubcommand("list", new ToolListCommand());
   }
 
   private static CommandLine sessionGroup(Workspace workspace) {

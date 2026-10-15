@@ -219,6 +219,12 @@
                     <configuration>
                         <release>${maven.compiler.release}</release>
                         <encoding>${project.build.sourceEncoding}</encoding>
+                        <!-- 保留方法参数名（javac -parameters）。第 20 节的 @Tool 方法靠它把真实参数名
+                             写进 JSON Schema：Spring AI 的 @ToolParam 没有 name() 元素，只能从
+                             Parameter.getName() 取；不开则退化成 arg0/arg1，模型无法构造工具调用。
+                             这是「编译通过、门禁全绿、运行时功能坏掉」的静默失效，由
+                             AnnotatedToolAdapterTest#notifySchema_usesRealParameterNames 钉死。 -->
+                        <parameters>true</parameters>
                     </configuration>
                 </plugin>
                 <plugin>

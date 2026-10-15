@@ -20,7 +20,7 @@
 | 8 | `oryxos profile show <name>` | 轻 | `ProfileShowCommand` | 文件系统（`ProfileLoader.loadAllDetailed()`） |
 | 9 | `oryxos profile delete <name> [--force]` | 轻 | `ProfileDeleteCommand` | 文件系统 |
 | 10 | `oryxos provider list` | 轻 | `ProviderListCommand` | `ProviderProperties.SUPPORTED_PROVIDERS` + 文件系统 |
-| 11 | `oryxos tool list` | 轻 | `ToolListCommand` | `ToolCatalog` 接缝（本节空实现） |
+| 11 | `oryxos tool list` | **重**（第 20 节由轻改重，见 §2.10） | `ToolListCommand` | `ToolRegistry` 接缝 |
 | 12 | `oryxos session list` | 轻 | `SessionListCommand` | 原生 JDBC（`sessions` 表） |
 
 **Picocli 组织**：12 个叶子命令类 + 4 个只做分组的类（`ProfileCommand` / `ProviderCommand` / `ToolCommand` / `SessionCommand`），挂在 `OryxOsCli` 的 `subcommands` 上。对外是**空格分隔的多级命令**（`oryxos profile list`）——Picocli 的子命令按首个 token 匹配，名为 `"profile list"` 的单个子命令永远匹配不上，多级命令只能用「组 + 子命令」表达（[research.md](../research.md) D12）。
@@ -108,7 +108,9 @@
 列出 `ToolRegistry` 全量 Tool：name、description、来源（`builtin` / `annotation` / `mcp:<server>`）。
 
 - 本节经 `ToolCatalog` 接缝取（空实现），**输出空表并注明「第 20 节接入 ToolRegistry」**（spec 仲裁 9）。MUST NOT 编造工具。
-- 命令本身已按最终形态写（经接缝取、按来源分组打印），第 20 节只需换实现，**不改本命令**。
+- **第 20 节的实际状态（本行由第 20 节 T021 回修）**：本命令**由轻改重**、经 `ToolRegistry` 接缝取数、按来源分组打印，空组照样打印并注明原因。原文写「命令本身已按最终形态写，第 20 节只需换实现，**不改本命令**」与本节 T033 注的**已报批实施期偏离**（「第 20 节需要改本命令，**不是只换实现**」）直接矛盾——第 18 节交付时本命令是**轻**的（不启 Spring 上下文），而 `ToolCatalog` 空实现是 `CliAssemblyConfiguration` 里的 `@Bean`，轻命令根本够不着；且 §2.10 要的「全量 + 按来源分组」用当时的 `OryxTool` 接口（无来源访问器）表达不出来。按「规则文本与既成做法冲突时以做法为准并回修规则」的惯例，以 T033 注为准。
+- **由轻改重的依据**：§1 的判据只有一条——这条命令要不要调模型、跑引擎？列出 MCP 工具**必须连上 server**（清单只有连上才知道），这已经是「跑引擎」。代价如实记录：有 MCP server 声明时最多等待 `10 秒 × server 数`。
+- **命令名 / 参数 / 退出码三项不变**——契约 §1 要求走修订程序的正是这三项，本次改动一个都没碰。
 
 ### 2.11 `oryxos session list`
 
@@ -143,7 +145,7 @@
 | `provider list` | 密钥就绪状态 | 未接入（第 26 节） |
 | `status` | 密钥就绪状态 | 未接入（第 26 节） |
 | `status` | 定时任务数 | 未接入（第 28 节） |
-| `tool list` | 工具清单 | 第 20 节接入 ToolRegistry |
+| `tool list` | 工具清单 | **已接入**（第 20 节接入 `ToolRegistry`） |
 | `serve` | HTTP 端口 | 端口在第 26 节启用 |
 
 **为什么这条要写进契约**：编造一个「就绪」比留白更糟——用户会据此以为某个 Provider 可用，然后在 `chat` 时撞上失败，且不知道该信谁。留白 + 注明节号是**唯一诚实**的做法。

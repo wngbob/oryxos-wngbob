@@ -67,6 +67,18 @@
             <artifactId>spotbugs-annotations</artifactId>
             <scope>provided</scope>
         </dependency>
+
+        <!--
+          第 20 节起本模块有测试：装配测试必须起真实 Spring 上下文。
+          为什么必须起真上下文：@ConditionalOnMissingBean 的让位机制、@Bean 声明顺序约束，
+          都只在真上下文里才求值——用 AnnotationConfigApplicationContext 手工注册的等价物会把这
+          两条最易踩的坑绕过去，测试就变成自证。
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
