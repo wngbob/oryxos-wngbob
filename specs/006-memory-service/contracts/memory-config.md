@@ -29,6 +29,17 @@ oryxos:
 
 **两个 `mem0` 子键的占位都带默认值**（空 / `oryxos`）：`markdown` 与 `sqlite` 两档根本不读它们，**缺失不该让启动失败**（与 `oryxos.search.tavily-api-key` 的 `${TAVILY_API_KEY:}` 同一条口径）。校验推迟到"真的选中 mem0 档"那一刻。
 
+### 1.1 怎么切换 `backend`（本仓契约只有两条路）
+
+| 形式 | 状态 | 说明 |
+| --- | --- | --- |
+| 改 `application.yaml` 的 `backend:` | ✅ **契约内** | 本契约的正路，落点是那唯一一份配置源 |
+| `-Doryxos.memory.backend=sqlite` | ✅ **契约内** | JVM 系统属性，**必须写在 `-jar` 前面**；优先级高于 jar 内的 `application.yaml`（已实测） |
+| 环境变量 `ORYXOS_MEMORY_BACKEND=sqlite` | ⚠️ **不是本仓契约** | 它**事实上生效**，但那是 **Spring Boot relaxed binding 的内建行为**（`oryxos.memory.backend` → `ORYXOS_MEMORY_BACKEND`），不是我们立的对外概念——[tasks.md](../tasks.md) T002 明写"自造一个 `ORYXOS_MEMORY_BACKEND` 等于凭空多一个对外概念"。**MUST NOT 写进文档、脚本或部署清单**：我们不为它承诺行为，也不为它写测试。 |
+| `--oryxos.memory.backend=sqlite`（Spring Boot 惯用的程序参数形式） | ❌ **不生效** | **Picocli 先吃掉命令行**，它不认这个选项 → 实测输出 `Unknown option: '--oryxos.memory.backend=bogus'` + `用法: oryxos [-hV] [COMMAND]`，退出码 **2**，命令根本没跑起来。`SimpleCommandLinePropertySource` 那条路在本仓走不通。**已实测（2026-10-16，对着 `oryxos.jar`）。** |
+
+**为什么要写这一行**：`--key=value` 是 Java / Spring Boot 使用者最顺手的肌肉记忆，而在本仓它是**静默失败**（表现为"命令没反应"）。契约里点名它，是为了让下一个人少踩一次。
+
 ---
 
 ## 2. 报错口径（三条，逐条可测）

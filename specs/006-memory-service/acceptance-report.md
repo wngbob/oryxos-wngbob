@@ -10,7 +10,7 @@
 | 分支 | `class-22`（未 commit、未 push） |
 | 日期 | 2026-10-15 |
 | 任务完成度 | **37 / 37** |
-| 结论 | **通过**——`mvn clean verify` 全绿（451 条测试，含 P3C / SpotBugs / FindSecBugs / Checkstyle / Spotless）；课件 harness 六个测试类逐个对号；本节交付物 19 个文件存在且非空；前序五节测试全绿；H4 六条不变量逐条自查完毕，其中 ① 的两条涉外 IO 路径**均已有裁决**（记忆文件 IO 交付时裁决；Mem0 出站 HTTP 于 2026-10-15 裁决，见 §5.1）。剩余人工项 4 条，见 §6.4。 |
+| 结论 | **通过**——`mvn clean verify` 全绿（451 条测试，含 P3C / SpotBugs / FindSecBugs / Checkstyle / Spotless）；课件 harness 六个测试类逐个对号；本节交付物 19 个文件存在且非空；前序五节测试全绿；H4 六条不变量逐条自查完毕，其中 ① 的两条涉外 IO 路径**均已有裁决**（记忆文件 IO 交付时裁决；Mem0 出站 HTTP 于 2026-10-15 裁决，见 §5.1）。剩余人工项 4 条，见 §6.4——**其中 3 条已于 2026-10-16 由用户人工跑过并通过，1 条（Mem0 真连）经裁决有意不做**，见 §6.5。 |
 
 ---
 
@@ -414,12 +414,41 @@ java -jar /home/wngbob/oryxos-wngbob/oryxos-boot/target/oryxos.jar tool list
 #    收尾：rm -rf /tmp/oryxos22
 ```
 
-### 6.4 剩余人工项（harness 判不了，等你过）
+### 6.4 剩余人工项（harness 判不了）
 
-1. **三档切换**：`oryxos.memory.backend` 分别设成 `markdown` / `sqlite`，各跑一次真对话，`save_memory` 写入、下一轮 `longTermMemory()` 带上——同一段对话、同一个体感，只是底下换了后端。这是「墙」最直观的人工证据。
-2. **真模型完整走一遍**：对话里说一句值得记的话，Agent 主动调 `save_memory`；开新会话，system prompt 里带着核心记忆——「始终在场」在真实链路里的体感。**本节从未接过真模型**。
-3. **Mem0 档真连一次（可选）**：部署一个自托管 Mem0，`memory.backend: mem0`，验证 `save_memory` 真的进了 Mem0、`recall` 能语义召回。**本节只做 REST 集成与 mock 测试，从未连过真 server**——报文（`/memories`、`/search`、`results` 字段名）是**我们自己定的最小契约，从未与真实 Mem0 服务对过**；真接上时第一个要核的就是 `results` 字段名（`Mem0MemoryStore.RESULTS_FIELD` 的 javadoc 已写明）。
-4. **`MEMORY.md` 与 `USER.md` 的角色**：`USER.md` 全程只读（已 grep 确认——全仓只有 `ContextLoader.DEFAULT_BOOTSTRAP` 读它、`InitCommand` 幂等建模板，**无任何写入路径**），`MEMORY.md` 能被 Agent 写入。这条已机器核对，但课件把它列为人工项，故一并列出供你复核。
+> **逐步骤的向导见 [manual-test-guide.md](manual-test-guide.md)**（Step 0~9，含命令、判据与「最容易踩的八个坑」）。本节只列项与状态。
+>
+> **状态（2026-10-16）**：第 1 / 2 / 4 项**已由用户按向导 Step 0~8 全程人工跑过，结论「都通过了」**；第 3 项（Mem0 真连）经用户裁决**有意不做**。详见 §6.5。
+
+1. **三档切换**：`oryxos.memory.backend` 分别设成 `markdown` / `sqlite`，各跑一次真对话，`save_memory` 写入、下一轮 `longTermMemory()` 带上——同一段对话、同一个体感，只是底下换了后端。这是「墙」最直观的人工证据。**✅ 已验（向导 Step 6）**。
+2. **真模型完整走一遍**：对话里说一句值得记的话，Agent 主动调 `save_memory`；开新会话，system prompt 里带着核心记忆——「始终在场」在真实链路里的体感。~~本节从未接过真模型~~ → **✅ 已验（向导 Step 3 / 4 / 5），2026-10-16**。
+3. **Mem0 档真连一次** —— **⛔ 有意不做（用户裁决，2026-10-16）**，不是遗漏、也不是待办。原措辞保留以留痕：本节只做 REST 集成与 mock 测试，**从未连过真 server**——报文（`/memories`、`/search`、`results` 字段名）是**我们自己定的最小契约，从未与真实 Mem0 服务对过**；真接上时第一个要核的就是 `results` 字段名（`Mem0MemoryStore.RESULTS_FIELD` 的 javadoc 已写明）。**连带后果如实记**：这一档的报文契约由「待验证」正式转为**永久记录的已知边界**——`Mem0MemoryStore` 与任何真实 Mem0 服务**一次都没对过话**，单测只证明「请求发得出去、body 形状对、响应按我们的假设解析得对」，不证明「真实 Mem0 会这样回」。将来接真服务时，**不要把它当成已验证过的档**。
+4. **`MEMORY.md` 与 `USER.md` 的角色**：`USER.md` 全程只读（已 grep 确认——全仓只有 `ContextLoader.DEFAULT_BOOTSTRAP` 读它、`InitCommand` 幂等建模板，**无任何写入路径**），`MEMORY.md` 能被 Agent 写入。这条已机器核对，课件把它列为人工项，故一并列出供复核。**✅ 已复核（向导 Step 1 / 8）**。
+
+### 6.5 人工验收记录（2026-10-16，用户执行）
+
+**执行方式**：用户按 [manual-test-guide.md](manual-test-guide.md) 的 Step 0~8 全程人工执行（真 DeepSeek 模型、真 `oryxos.jar`、`/tmp` 下的临时工作区）。
+
+**结论**：**Step 0~8 全部通过，未报告任何一步失败。**
+
+**覆盖面（别把 9 步当成等价的「都验过了」）**：
+
+| 步骤 | 验的是什么 | 状态 |
+| --- | --- | --- |
+| Step 0 | 构建产物与源码一致 | ✅ 过（`oryxos.jar` mtime 2026-10-16 15:24，晚于全部源码，无需重建） |
+| Step 1 | `oryxos init` 建出的 `MEMORY.md` 初始形态 | ✅ 过 |
+| Step 2 | 造出带 `save_memory` / `recall_memory` 的 Agent（`tools: []` 陷阱） | ✅ 过 |
+| Step 3 | markdown 档：Agent **真去调** `save_memory`（审计表为凭据）+ 文件真有那条记忆 | ✅ 过 |
+| Step 4 | 隔离「文件 → prompt」这一半（不依赖模型调工具） | ✅ 过 |
+| Step 5 | **决定性证据**：删库后新会话仍答得出不可猜的事实，且 `messages_json` 里没有旧对话 | ✅ 过 |
+| Step 6 | 切 `sqlite` 档，同一段对话再走一遍（记忆换地方） | ✅ 过 |
+| Step 7 | 非法后端取值报错、不静默退回 | ✅ 过 |
+| Step 8 | `USER.md` 只读（无写入路径）+ 依赖方向自查 | ✅ 过 |
+| Step 9 | Mem0 档真连 | ⛔ **有意不做**（见 §6.4 第 3 项） |
+
+**如实留痕**：用户未逐步说明各步的具体输出（例如 Step 6 的反向确认做没做），故本节**只记「整体通过」这个结论，不写步骤级细节**——与第 19 节对「用户未说明 Step 7 用的哪种故障注入」的处理同口径。
+
+**这一步的实际分量**：它把本节从「harness 判卷 + 从未接过真模型」推进到**真链路已验证**——判据 2（Agent 主动调 `save_memory`）与判据 3（跨会话核心记忆在场）此前只有单测与代码推演支撑，现在有真人真模型的观察。**仍未验证的只有 Mem0 那一档**。
 
 ---
 

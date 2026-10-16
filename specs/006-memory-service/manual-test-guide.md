@@ -21,9 +21,11 @@
 | 3 | **跨会话长期记忆**：开一个全新会话，核心记忆自动在场 | Step 4 / Step 5 | 新会话的 `messages_json` 里**没有**上一次的对话，Agent 却答得出那个不可猜的事实 |
 | 4 | **`MEMORY.md` 与 `USER.md` 的角色** | Step 1 / Step 8 | `MEMORY.md` 是 Agent 的（读写）；`USER.md` 是你的（OryxOS 只读，全仓无写入路径） |
 
-**预计耗时**：Step 0~8 约 30 分钟（其中 Step 0 构建 5~10 分钟）。Step 9（Mem0）另算，要先有一个自托管 Mem0。
+**预计耗时**：Step 0~8 约 30 分钟（其中 Step 0 构建 5~10 分钟）。Step 9（Mem0）另算，要先有一个自托管 Mem0——**该步已于 2026-10-16 经用户裁决不做**，留在这里是为了让后来者知道「还有这么一档没对过真实服务」，不是为了让你补跑。
 
-## 本次已实测记录（2026-10-15）
+## 实测记录
+
+### 写向导时已实测（2026-10-15）
 
 **不需要模型的那几条，写这份向导时已经真跑过了**，命令与输出都对得上（`/tmp/oryxos-l22-check`，跑完已删）：
 
@@ -34,7 +36,26 @@
 - `-Doryxos.memory.backend=bogus` **真的报错**：`未知的长期记忆后端 "bogus"（合法取值：markdown / sqlite / mem0）`，**不静默退回默认档**
 - `oryxos tool list` 默认输出 **`builtin (15)`**
 
-**需要模型的那几条（Step 3 / 5 / 6 / 9）本次未跑**——写向导的这台机器上没有 `DEEPSEEK_API_KEY`。这几条要你来。
+写向导的那台机器上没有 `DEEPSEEK_API_KEY`，故需要模型的那几条（Step 3 / 5 / 6 / 9）当时**未跑**——本向导里它们的「预期」是按代码推出来的。
+
+### 用户执行（2026-10-16）
+
+**用户按 Step 0~8 全程人工执行，结论：全部通过，未报告任何一步失败。**
+
+| 步骤 | 状态 |
+| --- | --- |
+| Step 0 构建 / 1 初始形态 / 2 造 Agent | ✅ 过 |
+| Step 3 真模型主动调 `save_memory`（审计表为凭据） | ✅ 过 |
+| Step 4 隔离「文件 → prompt」 | ✅ 过 |
+| Step 5 **决定性证据**：删库后新会话仍答得出不可猜的事实 | ✅ 过 |
+| Step 6 切 `sqlite` 档 | ✅ 过 |
+| Step 7 非法后端取值报错 | ✅ 过 |
+| Step 8 `USER.md` 只读 + 依赖方向自查 | ✅ 过 |
+| Step 9 Mem0 档真连 | ⛔ **有意不做**（用户裁决；不是遗漏，也不是待办） |
+
+**如实留痕**：用户未逐步说明各步的具体输出（例如 Step 6 的反向确认做没做），故这里**只记「整体通过」这个结论，不写步骤级细节**。
+
+**因此下面各 Step 的「预期」现在的性质**：Step 0~8 的预期**已被真人真模型走过一遍**；**只有 Step 9 的预期仍是按代码推出来的**（该档经裁决不做）。
 
 ---
 
@@ -489,10 +510,10 @@ curl -s "$MEM0_BASE_URL/memories?user_id=$MEM0_USER_ID" | python3 -m json.tool |
 1. **模型的意图**——它到底有没有主动去调 `save_memory`。审计表告诉你事实，但「这个说法能不能让模型想起来要记」是体感问题，只有你能判。
 2. **「同一个体感」这句话**——Step 6 里换后端前后，对话的感觉是不是真的一样。这是判据 1 的定性部分，测试断言不出来。
 3. **可猜 / 不可猜**——Step 5 用的事实必须是模型猜不出来的。换成「我偏好 Java」这条判据当场失效，而它看起来仍然「通过了」。
-4. **报文契约**——只有 Step 9 能给出真实 Mem0 的响应样本。
+4. **报文契约**——只有 Step 9 能给出真实 Mem0 的响应样本。**该步经裁决不做**，故 Mem0 档的报文契约**永远不会**由本向导校验；它作为**已知边界**记录在 [acceptance-report.md](acceptance-report.md) §6.4 第 3 项。别把 `Mem0MemoryStore` 当成已验证过的档。
 5. **如实记录**——哪一步没通过就写没通过。**尤其别把「Agent 说记住了」写成「`save_memory` 已验证」。**
 
-## 最容易踩的七个坑
+## 最容易踩的八个坑
 
 | # | 坑 | 症状 | 怎么办 |
 | --- | --- | --- | --- |
@@ -503,17 +524,18 @@ curl -s "$MEM0_BASE_URL/memories?user_id=$MEM0_USER_ID" | python3 -m json.tool |
 | 5 | **`-D` 写在 `-jar` 后面** | 配置不生效，`java` 把它当成传给程序的参数 | `java -Doryxos.memory.backend=sqlite -jar ...` |
 | 6 | **删了库却忘了 `init`** | `no such table: sessions` | 删库后必跑 `oryxos init`（幂等） |
 | 7 | **在 SQLite 档做 Step 5 的删库** | 记忆跟着库一起没了，误判成「记忆没生效」 | 删库那一步只在 markdown 档做 |
+| 8 | **用 Spring Boot 惯用的 `--oryxos.memory.backend=sqlite`** | `Unknown option`，退出码 **2**，命令根本没跑起来 | 用 `-D`（坑 5）。`--key=value` 是 Spring Boot 的 `SimpleCommandLinePropertySource` 形式，但这里 **Picocli 先吃掉命令行**，它不认这个选项、直接拒。**已实测**。另外环境变量 `ORYXOS_MEMORY_BACKEND=sqlite` 也生效（Spring Boot 的 relaxed binding），但那是**框架内建行为、不是本仓契约**，别写进脚本 |
 
-## 附录 A — 本次仍未做的（如实记）
+## 附录 A — 仍未做的（如实记）
 
-- **Step 3 / 5 / 6 / 9 需要真模型，写向导的这台机器没有 `DEEPSEEK_API_KEY`，未跑。** 本向导里所有「预期」都是按代码推出来的，不是实测输出；只有「本次已实测记录」那一节是实测。
-- **Mem0 档与真实服务的报文契约从未对过。** 契约是我们自己定的最小报文（`/memories`、`/search`、`results`），Step 9 是它的第一次真实校验。
+- **Step 9（Mem0 档真连）经用户裁决不做（2026-10-16）**——不是遗漏、不是待办、也不是「没时间跑」。**Mem0 档与真实服务的报文契约从未对过**：契约是我们自己定的最小报文（`/memories`、`/search`、`results`），单测只证明「请求发得出去、body 形状对、响应按我们的假设解析得对」，不证明「真实 Mem0 会这样回」。**这一档从「待验证」转为永久记录的已知边界。**
+- **步骤级细节未留痕**：用户 2026-10-16 跑完 Step 0~8 后只给了整体结论（都通过），未逐步说明各步输出（例如 Step 6 的反向确认做没做）。故本向导**不声称**任何步骤级的具体观察结果。
 - **Lark 档未验收**（第 19 节遗留，与本节无关，列在这里只是提醒别把它算进本节）。
 
 ## 参考来源
 
-- 契约细节：[contracts/](./contracts/)（`memory-config.md` §1 是三个配置键的契约）
+- 契约细节：[contracts/](./contracts/)（`memory-config.md` §1 是三个配置键的契约，**§1.1 是切档方式与它的实测边界**）
 - 数据形态：[data-model.md](./data-model.md)
 - 可复制的验证命令：[quickstart.md](./quickstart.md)
-- 本节验收结论与证据：[acceptance-report.md](./acceptance-report.md)（§6.4 是这四项人工项的原始清单）
+- 本节验收结论与证据：[acceptance-report.md](./acceptance-report.md)（§6.4 是四项人工项的清单与状态，§6.5 是 2026-10-16 的人工验收记录）
 - 写作体例参照：[`specs/004-notify-outbound/manual-test-guide.md`](../004-notify-outbound/manual-test-guide.md)
