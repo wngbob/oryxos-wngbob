@@ -58,3 +58,16 @@ oryxos:
   # 同理 MUST 为 ${ENV_VAR} 占位、禁止明文(章程 VIII/FR-010)。
   search:
     tavily-api-key: ${TAVILY_API_KEY:}
+  # 长期记忆后端档位(第 22 节,契约 contracts/memory-config.md §1)。
+  # 三档递进:markdown(默认,零依赖、人可读、git 可跟踪)→ sqlite(量大后的结构化升级,仍零外部依赖)
+  # → mem0(真要自动抽取/冲突消解/语义检索时的自托管外部集成档)。换档只改这一行,上层零改动。
+  # 字面量而非环境变量占位:切档走改配置或 -Doryxos.memory.backend=sqlite(quickstart §3)。
+  # 取值未知时装配处报错并列出合法取值,MUST NOT 静默退回默认档(FR-016)。
+  memory:
+    backend: markdown
+    mem0:
+      # 自托管 Mem0 的地址与用户作用域。两个占位**都带默认值**——markdown / sqlite 两档根本不读它们,
+      # 缺失不该让启动失败;校验推迟到「真的选中 mem0 档」那一刻,且消息只带变量名、不带值(FR-018)。
+      # 环境变量名不带 oryxos. 前缀:那是外部系统的既有命名(与上游一致)。
+      base-url: ${MEM0_BASE_URL:}
+      user-id: ${MEM0_USER_ID:oryxos}

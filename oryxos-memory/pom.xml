@@ -19,9 +19,48 @@
             <groupId>io.oryxlabs</groupId>
             <artifactId>oryxos-core</artifactId>
         </dependency>
+
+        <!-- oryxos-storage 是共享基础设施模块：SQLite 档的记忆条目持久化消费 MemoryEntryRepository。
+             方向与 oryxos-tool 消费 NotifyChannelRepository 一致（上层能力消费持久化）；
+             storage 不反向依赖 memory，不成环（quickstart §8 第 ② 条 grep 钉死）。 -->
+        <dependency>
+            <groupId>io.oryxlabs</groupId>
+            <artifactId>oryxos-storage</artifactId>
+        </dependency>
+
+        <!-- Spring AI 只用一半：@Tool / @ToolParam 注解的 schema 生成能力
+             （自动 tool 执行在 core 侧被禁用，章程原则 III）。与 oryxos-tool 同一坐标、同一纪律。 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-model</artifactId>
+        </dependency>
+
+        <!-- RestClient：Mem0 档的 HTTP 出口（带连接 + 读取有界超时）。同步阻塞，不引 WebClient
+             （章程原则 VIII：核心阶段不引入响应式）。 -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-web</artifactId>
+        </dependency>
+
+        <!--
+          jackson-databind：Mem0 档要读响应体（按业务字段取记忆条目）并构造请求体。
+          这本是既有传递边（经 spring-ai-model），这里显式化——与 oryxos-tool / oryxos-cli
+          是同一条纪律：直接 import 的类型就该有直接的依赖边，发行物不新增任何工件。
+          版本由 Spring Boot BOM 管，不写 version。
+        -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <!--
+          本节起本模块有测试：契约测试参数化遍历三档实现，SQLite 档需要 @DataJpaTest 起 JPA 切片，
+          Markdown / 内存两档需要 @TempDir，Mem0 档需要 spring-test 的 MockRestServiceServer。
+        -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter</artifactId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

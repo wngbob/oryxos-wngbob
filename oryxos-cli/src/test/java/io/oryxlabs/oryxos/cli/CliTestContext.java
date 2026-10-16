@@ -1,6 +1,8 @@
 package io.oryxlabs.oryxos.cli;
 
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.springframework.boot.Banner;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -31,18 +33,38 @@ final class CliTestContext {
    * @return 启动好的上下文，<b>调用方负责 close</b>
    */
   static ConfigurableApplicationContext boot(Path dbFile, Class<?>... extraSources) {
+    return boot(dbFile, Map.of(), extraSources);
+  }
+
+  /**
+   * 带额外配置项的启动重载。
+   *
+   * <p><b>为什么需要它</b>：第 22 节的记忆装配要验的正是「{@code oryxos.memory.backend} 取不同值时造出哪一档」与「未知取值报错」，
+   * 而这两条都必须把配置喂进去才验得到。直接调 {@code memoryService(...)} 传参看似更轻，但那验不到 {@code @Value} 占位、
+   * 也验不到「未知取值让上下文起不来」——而后者才是真正会发生在运维身上的形态。
+   *
+   * @param dbFile SQLite 库文件
+   * @param extraProperties 额外的配置项（覆盖 {@code application.yaml} 的同名键）
+   * @param extraSources 额外的配置类
+   * @return 启动好的上下文，<b>调用方负责 close</b>
+   */
+  static ConfigurableApplicationContext boot(
+      Path dbFile, Map<String, Object> extraProperties, Class<?>... extraSources) {
     Class<?>[] sources = new Class<?>[extraSources.length + 1];
     System.arraycopy(extraSources, 0, sources, 0, extraSources.length);
     sources[extraSources.length] = CliApplication.class;
+    Map<String, Object> properties = new LinkedHashMap<>();
+    properties.put("spring.datasource.url", "jdbc:sqlite:" + dbFile);
+    properties.put("spring.datasource.driver-class-name", "org.sqlite.JDBC");
+    properties.put("spring.datasource.hikari.maximum-pool-size", 1);
+    properties.put("spring.jpa.hibernate.ddl-auto", "none");
+    properties.put(
+        "spring.jpa.properties.hibernate.dialect", "org.hibernate.community.dialect.SQLiteDialect");
+    properties.putAll(extraProperties);
     return new SpringApplicationBuilder(sources)
         .web(WebApplicationType.NONE)
         .bannerMode(Banner.Mode.OFF)
-        .properties(
-            "spring.datasource.url=jdbc:sqlite:" + dbFile,
-            "spring.datasource.driver-class-name=org.sqlite.JDBC",
-            "spring.datasource.hikari.maximum-pool-size=1",
-            "spring.jpa.hibernate.ddl-auto=none",
-            "spring.jpa.properties.hibernate.dialect=org.hibernate.community.dialect.SQLiteDialect")
+        .properties(properties)
         .run();
   }
 }

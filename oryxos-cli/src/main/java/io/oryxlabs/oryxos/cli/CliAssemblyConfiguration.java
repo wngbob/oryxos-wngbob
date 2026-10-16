@@ -17,12 +17,20 @@ import io.oryxlabs.oryxos.core.session.JpaSessionService;
 import io.oryxlabs.oryxos.core.session.SessionService;
 import io.oryxlabs.oryxos.core.tool.OryxTool;
 import io.oryxlabs.oryxos.core.tool.ToolCatalog;
+import io.oryxlabs.oryxos.memory.MemoryService;
+import io.oryxlabs.oryxos.memory.MemoryServiceImpl;
+import io.oryxlabs.oryxos.memory.builtin.MemoryTools;
+import io.oryxlabs.oryxos.memory.store.LongTermMemoryStore;
+import io.oryxlabs.oryxos.memory.store.MarkdownMemoryStore;
+import io.oryxlabs.oryxos.memory.store.Mem0MemoryStore;
+import io.oryxlabs.oryxos.memory.store.SqliteMemoryStore;
 import io.oryxlabs.oryxos.provider.JpaLlmCallRecorder;
 import io.oryxlabs.oryxos.provider.LlmCallRecorder;
 import io.oryxlabs.oryxos.provider.ProviderProperties;
 import io.oryxlabs.oryxos.provider.ProviderService;
 import io.oryxlabs.oryxos.provider.ToolSchemaAdapter;
 import io.oryxlabs.oryxos.storage.repository.LlmCallRepository;
+import io.oryxlabs.oryxos.storage.repository.MemoryEntryRepository;
 import io.oryxlabs.oryxos.storage.repository.NotifyChannelRepository;
 import io.oryxlabs.oryxos.storage.repository.SessionRepository;
 import io.oryxlabs.oryxos.storage.repository.ToolInvocationRepository;
@@ -486,6 +494,7 @@ public class CliAssemblyConfiguration {
    * @param httpTools HTTP 工具
    * @param interactionTools 交互工具
    * @param webSearchTools 搜索工具
+   * @param memoryTools 记忆工具（第 22 节交付物，本节注册）
    * @param mcpClientService 连接 MCP server 并把它们的工具注册进本注册表
    * @return 注册表
    */
@@ -497,6 +506,7 @@ public class CliAssemblyConfiguration {
       HttpTools httpTools,
       InteractionTools interactionTools,
       WebSearchTools webSearchTools,
+      MemoryTools memoryTools,
       McpClientService mcpClientService) {
     ToolRegistry registry = new ToolRegistry();
     registry.registerAnnotated(notifyTools, "builtin");
@@ -505,6 +515,7 @@ public class CliAssemblyConfiguration {
     registry.registerAnnotated(httpTools, "builtin");
     registry.registerAnnotated(interactionTools, "builtin");
     registry.registerAnnotated(webSearchTools, "builtin");
+    registry.registerAnnotated(memoryTools, "builtin");
     // 最后才连 MCP：重名时保留先注册的内置工具（FR-023）。失联的 server 在这里被 WARN + 跳过，不拖垮启动（FR-010）
     mcpClientService.connectAll(registry);
     return registry;
@@ -534,7 +545,93 @@ public class CliAssemblyConfiguration {
   }
 
   /**
+   * 长期记忆后端的选择点（第 22 节交付物；contracts/memory-config.md §3）。
+   *
+   * <p><b>换后端只改这一处配置</b>（SC-004）：{@code oryxos.memory.backend} 决定造哪一档 {@link LongTermMemoryStore}，
+   * 而门面以上的代码——{@code PromptBuilder} / {@code MemoryTools} / {@code ReActLoop}——<b>一行都不改</b>。这正是第 21
+   * 节 「接口先行、墙之下可以随时换实现」那句话的兑现。
+   *
+   * <p><b>声明位置 MUST 在本类的 {@code memorySource()} 之前</b>——理由与失败形态见 {@link #memorySource()}。
+   *
+   * <p><b>用经典冒号 {@code switch} 而不是箭头 switch / switch 表达式</b>：PMD 6.55 的 ASM 解析不了那些形态，静态检查是构建门禁。
+   *
+   * <p><b>未知取值 MUST 报错并列出合法取值，MUST NOT 静默退回默认档</b>（FR-016）：运维改了配置、重启、以为生效了，实际还在用旧的 ——那比启动失败更难查。
+   *
+   * <p><b>{@code MemoryEntryRepository} 无条件注入是安全的</b>：Spring Data 的 Repository Bean 是代理，创建时不碰数据库；
+   * 默认档 {@code markdown} 下它一次都不会被调用。若改成「按需查找」反而要在装配处写条件分支，把一档的存在与否变成运行期问题。
+   *
+   * <p><b>{@code mem0} 分支的地址校验是唯一的拦截点</b>：配置侧两个子键都带默认值（{@code ${MEM0_BASE_URL:}} 是空串），
+   * 缺失时配置加载本身永远不会失败，故校验推迟到「真的选中 mem0 档」这一刻（FR-018）。
+   *
+   * @param workspace 工作区，Markdown 档取它的 {@code .oryxos/} 目录
+   * @param memoryEntryRepository {@code memory_entries} 表的存取出口，只有 {@code sqlite} 档会用到
+   * @param backend 后端档位：{@code markdown}（默认）/ {@code sqlite} / {@code mem0}
+   * @param mem0BaseUrl Mem0 服务地址（含凭证）；仅 {@code mem0} 档读取
+   * @param mem0UserId 记忆归属的用户标识；仅 {@code mem0} 档读取
+   * @return 选中的那一档后端之上的门面
+   */
+  @Bean
+  public MemoryService memoryService(
+      Workspace workspace,
+      MemoryEntryRepository memoryEntryRepository,
+      @Value("${oryxos.memory.backend:markdown}") String backend,
+      @Value("${oryxos.memory.mem0.base-url:}") String mem0BaseUrl,
+      @Value("${oryxos.memory.mem0.user-id:oryxos}") String mem0UserId) {
+    LongTermMemoryStore store;
+    switch (backend) {
+      case "markdown":
+        store = new MarkdownMemoryStore(workspace.root());
+        break;
+      case "sqlite":
+        store = new SqliteMemoryStore(memoryEntryRepository);
+        break;
+      case "mem0":
+        store = new Mem0MemoryStore(requireMem0BaseUrl(mem0BaseUrl), mem0UserId);
+        break;
+      default:
+        throw new IllegalArgumentException(
+            "未知的长期记忆后端 \"" + backend + "\"（合法取值：markdown / sqlite / mem0）");
+    }
+    return new MemoryServiceImpl(store);
+  }
+
+  /**
+   * 记忆工具（第 22 节交付物）：{@code save_memory} / {@code recall_memory}。
+   *
+   * <p><b>参数是宽门面而不是 core 的窄接缝</b>：工具本来就要读写，而 {@code PromptBuilder} 收的是 {@code MemorySource}
+   * ——只看得见「读」。给 prompt 组装器两个写入方法等于给它越界的能力。
+   *
+   * @param memoryService 读写长期记忆的门面
+   * @return 记忆工具 Bean
+   */
+  @Bean
+  public MemoryTools memoryTools(MemoryService memoryService) {
+    return new MemoryTools(memoryService);
+  }
+
+  /**
+   * Mem0 档的地址校验：缺失时抛异常，消息<b>只带变量名、不带值</b>。
+   *
+   * <p>与 {@code ProfileLoader.resolveEnv} / {@code JpaNotifyChannelRegistry} 同口径（都抛异常），
+   * <b>刻意不同于</b> {@code McpServerConfigLoader} 的「跳过 + WARN」——那里一个 server 配错不该拖垮别的 server，
+   * 这里长期记忆只有一个后端，配错<b>必须</b>让调用失败。
+   *
+   * @param mem0BaseUrl 配置里解析出来的地址
+   * @return 原值
+   */
+  private static String requireMem0BaseUrl(String mem0BaseUrl) {
+    if (mem0BaseUrl == null || mem0BaseUrl.isBlank()) {
+      throw new IllegalArgumentException("长期记忆后端 mem0 需要环境变量 MEM0_BASE_URL，当前未设置");
+    }
+    return mem0BaseUrl;
+  }
+
+  /**
    * 长期记忆接缝的空实现（spec 仲裁 8 / FR-020）；让位机制同上。
+   *
+   * <p><b>第 22 节起它自动让位</b>：{@link #memoryService} 返回的 {@code MemoryServiceImpl} 也是 {@code
+   * MemorySource}， 且那个方法声明在本方法<b>之前</b>，故本方法求值时容器里已有 {@code MemorySource}，空实现不再创建。<b>本方法一行不改</b>
+   * （MUST NOT 手工删除、MUST NOT 加 {@code @Primary}）——这正是「让位机制」这四个字的兑现。
    *
    * @return 永远没有长期记忆的来源
    */

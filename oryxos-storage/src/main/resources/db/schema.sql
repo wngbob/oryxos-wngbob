@@ -64,7 +64,8 @@ CREATE TABLE IF NOT EXISTS sessions (
 -- name 是人指定的注册名，是业务键，故不用 AUTOINCREMENT。
 -- url 含 token，属敏感串，MUST NOT 出现在对话 / 日志 / 报错 / 命令输出中。
 -- config_json 形状为「JSON 对象、值均为字符串」，解析与校验归消费方。
--- 第 19 节只读——写入路径归第 26 节，故运行期本表恒为空是预期状态。
+-- 写入面自 2026-10-15 起由 CLI 三条轻命令提供（notify-channel add|list|remove，走原生 JDBC 绕过 Spring Data），
+-- 故运行期本表不再恒为空。REST CRUD 与管理台仍归第 26 节。
 CREATE TABLE IF NOT EXISTS notify_channels (
     name        VARCHAR(128) PRIMARY KEY,
     type        VARCHAR(32),
@@ -72,3 +73,19 @@ CREATE TABLE IF NOT EXISTS notify_channels (
     config_json TEXT,
     description VARCHAR(512)
 );
+
+-- 长期记忆条目（第 22 节新建，SQLite 档的持久化形态）
+-- 列名与语义逐字照 000-runtime-kernel/data-model.md 的 MemoryEntry，不新增列。
+-- 与 sessions / 审计表同口径:手工建表脚本维护,不依赖 hibernate.ddl-auto。
+-- scope 是分区(CORE 永远全量注入不参与检索 / ARCHIVAL 可截断可检索),写入时由调用方显式指定。
+-- 本表是全局单份,不按 Agent 隔离,故不与 agents / sessions 建任何外键。
+-- 归档区的截断在查询层用 LIMIT 实现(最近 100 条),核心区查询 MUST NOT 带 LIMIT。
+CREATE TABLE IF NOT EXISTS memory_entries (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    scope      VARCHAR(16) NOT NULL,
+    content    TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL
+);
+
+-- 按分区取数的索引:三处查询(核心区升序全量 / 归档区降序取最近 N 条 / 归档区 LIKE 检索)全部先按 scope 过滤。
+CREATE INDEX IF NOT EXISTS idx_memory_scope ON memory_entries (scope);

@@ -356,6 +356,8 @@ ActionType     = FILE_READ | FILE_WRITE | SHELL_COMMAND | HTTP_REQUEST
 > **要点一：** 应用层白名单是"劝阻级"防线，防的是模型犯傻误操作，防不住蓄意绕过，核心阶段不建议用它跑完全不可信的代码或对外做多租户。
 >
 > **要点二：** Sandbox 加白名单是核心阶段唯一的 Tool 治理手段，而 Profile 级的 Tool Policy（哪个 Agent 能用哪些 Tool）放在扩展阶段。核心阶段 Profile 的 `tools` 字段已经能限定 Agent 可用 Tool 子集，算是 Tool 治理的雏形，完整的 allow/deny 策略扩展阶段补。
+>
+> **要点三（沙箱范围）：** 沙箱管的是**模型可以指定目标的工具调用**——`FileTools` / `ShellTools` / `HttpTools` / `NotifyTools` 这些参数由 LLM 生成的入口。**装配期由配置决定的出站地址不在范围内**：长期记忆的 Mem0 档（`Mem0MemoryStore` 的 REST 出站）地址来自 `application.yaml` 而非模型，模型无法把它指向别处，不构成越界面。这与"记忆文件 IO 不过沙箱"是同一条理由——路径与地址都是编译期或装配期的常量，不是模型能拨动的指针。将来若真要管这类出站，形态是**在 `oryxos-core` 放一个 `OutboundGuard` 接缝**（`void check(String url)`，装配层适配成 `url -> sandbox.enforce(new SandboxAction(HTTP_REQUEST, url))`），由模块构造器注入——契约在 core、模块不依赖 `oryxos-tool`，不必把 `Sandbox` 契约整体下移。
 
 ### 6.8 通知推送（`NotifyTools`）
 
