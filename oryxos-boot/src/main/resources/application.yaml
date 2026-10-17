@@ -71,3 +71,25 @@ oryxos:
       # 环境变量名不带 oryxos. 前缀:那是外部系统的既有命名(与上游一致)。
       base-url: ${MEM0_BASE_URL:}
       user-id: ${MEM0_USER_ID:oryxos}
+
+# 沙箱白名单(第 24 节,契约 specs/007-sandbox-whitelist/contracts/sandbox-whitelist.md §3)。
+# 键名逐字是 snake_case、不带 oryxos. 前缀——技术方案 §6.7 与课件原文即此形态。
+# 两条口径,运维不读源码就该知道:
+#   ① 留空 = 全拒,不是不校验。忘了配的后果是「什么都跑不了」(可见、可查),而不是「什么都放行」(静默、危险)。
+#   ② 劝阻级防线:防的是模型犯傻与提示注入导致的越权,防不住蓄意绕过(命令拼接/软链接/编码绕过)。
+#      核心阶段 MUST NOT 用它跑完全不可信的代码、MUST NOT 对外做多租户。
+# 这份是「可用默认」不是「安全默认」:随包发出来只为开箱能跑通演示,生产部署 MUST 由运维按最小权限收紧。
+file:
+  # 留空 = 全拒(不是不校验);本块是劝阻级防线,防不住蓄意绕过。
+  allowed_paths: ["."]              # 当前工作目录(启动时标准化为绝对路径)
+shell:
+  # 留空 = 全拒(不是不校验);本块是劝阻级防线,防不住蓄意绕过。条目是「可执行文件名」,写 /bin/ls 会永不匹配。
+  allowed_commands: [ls, cat, head, tail, grep, find, wc, pwd, git]
+http:
+  # 留空 = 全拒(不是不校验);本块是劝阻级防线,防不住蓄意绕过。
+  allowed_domains:
+    - api.duckduckgo.com            # 免 key 搜索档的端点
+    - api.tavily.com                # 带 key 搜索档的端点
+    - open.feishu.cn                # 飞书群机器人
+    - open.larksuite.com            # Lark(与飞书同一套协议)
+    - qyapi.weixin.qq.com           # 企业微信群机器人

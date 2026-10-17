@@ -67,9 +67,9 @@ class LogStreamSeparationTest {
   }
 
   @Test
-  @DisplayName("dev 档根级别没被压到 ERROR/OFF —— PermissiveSandbox 那条故意打的 WARN MUST NOT 被静音")
+  @DisplayName("dev 档根级别没被压到 ERROR/OFF —— WARN 级诊断 MUST NOT 被静音")
   void devRootLevel_keepsWarnVisible() {
-    // 那条 WARN 是「沙箱窗口期」的缓解措施②（见 CLAUDE.md）：把根级别压到 WARN 之上，等于把一条留痕悄悄拆掉
+    // 守的是通用契约：WARN 及以下的诊断在 dev 档要看得见。把根级别压到 WARN 之上，等于把「出了事有留痕」这件事悄悄拆掉
     String dev = devBlock();
     assertThat(dev).contains("<root level=");
     assertThat(dev).doesNotContain("level=\"OFF\"");

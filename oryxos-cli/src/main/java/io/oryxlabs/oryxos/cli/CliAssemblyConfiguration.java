@@ -51,8 +51,11 @@ import io.oryxlabs.oryxos.tool.notify.RoutingNotifyChannelAdapter;
 import io.oryxlabs.oryxos.tool.notify.WeComNotifyAdapter;
 import io.oryxlabs.oryxos.tool.notify.WebhookNotifyAdapter;
 import io.oryxlabs.oryxos.tool.registry.ToolRegistry;
-import io.oryxlabs.oryxos.tool.sandbox.PermissiveSandbox;
+import io.oryxlabs.oryxos.tool.sandbox.FileSandboxProperties;
+import io.oryxlabs.oryxos.tool.sandbox.HttpSandboxProperties;
 import io.oryxlabs.oryxos.tool.sandbox.Sandbox;
+import io.oryxlabs.oryxos.tool.sandbox.ShellSandboxProperties;
+import io.oryxlabs.oryxos.tool.sandbox.WhitelistSandbox;
 import io.oryxlabs.oryxos.tool.search.DuckDuckGoSearchProvider;
 import io.oryxlabs.oryxos.tool.search.SearchProvider;
 import io.oryxlabs.oryxos.tool.search.TavilySearchProvider;
@@ -65,6 +68,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -79,6 +83,11 @@ import org.springframework.context.annotation.Configuration;
  * 辅助类（它们根本不启动上下文）。
  */
 @Configuration
+@EnableConfigurationProperties({
+  FileSandboxProperties.class,
+  ShellSandboxProperties.class,
+  HttpSandboxProperties.class
+})
 public class CliAssemblyConfiguration {
 
   /**
@@ -256,23 +265,35 @@ public class CliAssemblyConfiguration {
   }
 
   /**
-   * 沙箱接缝的<b>临时</b>实现（spec 仲裁 1；contracts/assembly.md §1.1 第 1 行）。
+   * 沙箱接缝的实现（技术方案 §6.7；contracts/sandbox-whitelist.md §4.1）。
    *
-   * <p><b>第 20~23 节之间白名单校验不生效</b>——这是已报批的取舍，不是遗漏。工具（{@code FileTools} / {@code ShellTools} / {@code
-   * HttpTools} / {@code NotifyTools}）构造时都要一个 {@code Sandbox}，而真正的实现归第 24 节；不挂这一档，工具就进不了容器。
+   * <p><b>返回类型取接缝类型 {@code Sandbox}，不取具体类</b>：调用方（{@code FileTools} / {@code ShellTools} / {@code
+   * HttpTools} / {@code NotifyTools} / {@code WebSearchTools}）只认接口，扩展阶段换成容器 / microVM 档时本方法体改一行、
+   * 五个工具一行不动。
    *
-   * <p><b>让位机制</b>：第 24 节在装配处声明 {@code WhitelistSandbox} 后，本 Bean 因
-   * {@code @ConditionalOnMissingBean} 自动不再创建，<b>本节的工具代码与调用方一行不改</b>（SC-009）。
+   * <p><b>保留 {@code @ConditionalOnMissingBean} 是有意留的覆盖接缝</b>：部署方自建一个 {@code Sandbox} Bean（例如未来的容器档）
+   * 即接管，无需改 OryxOS 的代码。这不是「临时实现让位」——第 20~23 节那个不校验任何东西的临时实现已按裁决 3 <b>整类删除</b>： 它是个 fail-open
+   * 组件，留在树里，Bean 声明一旦被误改（顺序 / 条件注解 / 被别处覆盖）就会静默回到「全放行」，兜底的只有一条 WARN 日志。 （历史留痕见 {@code
+   * specs/005-tool-registry/} 与本节验收报告，不在这里复述类名。）
    *
-   * <p><b>MUST NOT 用匿名类或 {@code @Primary} 代替</b>：匿名类无法让位、无法断言；{@code @Primary} 会让真实实现被永久遮蔽
+   * <p><b>MUST NOT 用匿名类或 {@code @Primary} 代替</b>：匿名类无法让位、无法断言；{@code @Primary} 会让部署方的实现被永久遮蔽
    * （contracts/assembly.md §6.2 / §6.4）。
    *
-   * @return 放行一切的临时沙箱；构造时自带一条 WARN
+   * <p><b>声明位置不影响任何让位链</b>：本方法不参与 {@code @ConditionalOnMissingBean} 的求值链（没有任何 Bean 依赖它的存在与否），
+   * 故无需为它引入声明顺序约束。
+   *
+   * @param fileProps 文件路径白名单（{@code file.allowed_paths}）
+   * @param shellProps 可执行文件名白名单（{@code shell.allowed_commands}）
+   * @param httpProps HTTP 域名白名单（{@code http.allowed_domains}）
+   * @return 应用层白名单沙箱
    */
   @Bean
   @ConditionalOnMissingBean(Sandbox.class)
-  public Sandbox sandbox() {
-    return new PermissiveSandbox();
+  public Sandbox sandbox(
+      FileSandboxProperties fileProps,
+      ShellSandboxProperties shellProps,
+      HttpSandboxProperties httpProps) {
+    return new WhitelistSandbox(fileProps, shellProps, httpProps);
   }
 
   /**

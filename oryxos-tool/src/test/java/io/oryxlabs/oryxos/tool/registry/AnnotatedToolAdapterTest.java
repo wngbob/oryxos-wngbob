@@ -6,8 +6,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.oryxlabs.oryxos.core.tool.OryxTool;
 import io.oryxlabs.oryxos.core.tool.ToolResult;
 import io.oryxlabs.oryxos.tool.notify.NotifyTools;
-import io.oryxlabs.oryxos.tool.sandbox.PermissiveSandbox;
+import io.oryxlabs.oryxos.tool.sandbox.FileSandboxProperties;
+import io.oryxlabs.oryxos.tool.sandbox.HttpSandboxProperties;
+import io.oryxlabs.oryxos.tool.sandbox.ShellSandboxProperties;
+import io.oryxlabs.oryxos.tool.sandbox.WhitelistSandbox;
 import java.lang.reflect.Method;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.tool.annotation.Tool;
@@ -31,8 +35,16 @@ class AnnotatedToolAdapterTest {
   @DisplayName("notify 的入参 Schema 里必须是真实参数名 content / channel，不能退化成 arg0")
   void notifySchema_usesRealParameterNames() throws NoSuchMethodException {
     // 第 19 节交付的 NotifyTools 是本节注册的第一个真实 @Tool Bean，用它守 -parameters 最贴近生产
+    // 沙箱用真实现 + 三个空表（= 全拒）：本用例只读 JSON Schema、一次都不执行工具，白名单空不空与它无关；
+    // 用真实现而不是再造一个全放行替身——那个替身已在第 24 节按裁决 3 整类删除，留着等于把 fail-open 又搬回来
     NotifyTools notifyTools =
-        new NotifyTools(new PermissiveSandbox(), (target, content) -> {}, channel -> null);
+        new NotifyTools(
+            new WhitelistSandbox(
+                new FileSandboxProperties(List.of()),
+                new ShellSandboxProperties(List.of()),
+                new HttpSandboxProperties(List.of())),
+            (target, content) -> {},
+            channel -> null);
 
     String schema = adapt(notifyTools, "notify", String.class, String.class).getInputSchema();
 

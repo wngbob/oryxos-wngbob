@@ -332,12 +332,15 @@ ActionType     = FILE_READ | FILE_WRITE | SHELL_COMMAND | HTTP_REQUEST
 
 接口签名里不出现"白名单""容器镜像""VM 配置"这类某一档实现特有的词——用最重的 microVM 实现去反向套这个签名，也应该能干净套入，这是校验接口是否中立的办法。
 
-**`WhitelistSandbox`（核心阶段唯一实现）。** 配置在 `application.yaml`（`file.allowed_paths`、`shell.allowed_commands`、`http.allowed_domains`、`smtp.allowed_endpoints`），内部按 `ActionType` 路由到四个私有校验方法：
+**`WhitelistSandbox`（核心阶段唯一实现）。** 配置在 `application.yaml`（`file.allowed_paths`、`shell.allowed_commands`、`http.allowed_domains`），内部按 `ActionType` 路由到**三个**私有校验方法：
 
-- `checkFilePath`（路径标准化后比对白名单，需处理 `../` 路径穿越）
+- `checkFilePath`（路径标准化后比对白名单，需处理 `../` 路径穿越；`FILE_READ` / `FILE_WRITE` 同路由到它）
 - `checkShellCommand`（精确比对可执行文件白名单；解释器仅在管理员显式列入时允许，并授予宿主机进程权限）
 - `checkHttpUrl`（解析 host 后做通配符匹配）
-- `checkSmtpEndpoint`（按 `host:port` 精确放行 SMTP 端点，端口缺省=任意）
+
+> **修订注（2026-10-17，第 24 节交付时加）**：本节原写「四个校验」并列出 `checkSmtpEndpoint`（按 `host:port` 精确放行 SMTP 端点）与配置键 `smtp.allowed_endpoints`。**现修订为三个**，SMTP 记扩展阶段：`ActionType` 只有四个值、**没有 SMTP 路由**，核心阶段也没有消费者（`EmailNotifyAdapter` 明确归扩展阶段）。原表述等于记了一件永远不做的事。将来真加 SMTP 通知，要做的是「`ActionType` 加第五个值 + `enforce` 加一个 case + 加一个 `checkSmtpEndpoint`」，接口签名不变。
+>
+> **另一处刻意推迟（不是遗漏）**：`FILE_READ` 与 `FILE_WRITE` 本节共用一份 `file.allowed_paths`。`ActionType` 仍把两类分开建模，接缝留着——将来真要按读写分权，加一个配置键并在 `enforce` 的两个 case 上分派即可，接口与调用方不用改。
 
 任意校验失败抛 `SandboxViolationException`，Tool 执行终止；异常信息直接复用 `ToolExecutor` 已有的失败审计路径写入 `tool_invocations`（`success=false`、`error_message`），不需要为 Sandbox 单独新增审计逻辑。
 
