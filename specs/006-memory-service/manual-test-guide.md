@@ -69,6 +69,7 @@
 6. **切后端 = 一个 JVM 系统属性**：`java -Doryxos.memory.backend=sqlite -jar ...`。`-D` 必须在 `-jar` **前面**。系统属性优先级高于 jar 里的 `application.yaml`，已实测。
 7. **本机没有 `sqlite3` CLI**（写向导时确认过）。查库一律用 `python3` 的 `sqlite3` 模块，本机 3.45.1 可用。
 8. **沙箱窗口期（别误判）**：第 20~23 节挂的是临时实现 `PermissiveSandbox`，**白名单校验不生效**，`read_file /etc/passwd` 会真的成功。这是**已报批的取舍**，归第 24 节。**验收 MUST NOT 把它记成本节的缺陷**；反过来，记忆文件 IO **根本不调** `Sandbox.enforce`（仲裁 3——路径是编译期常量，模型无法影响，不构成越界面）。
+   > **2026-10-17 修订注（沙箱窗口期已关闭）**：本条**前半段已失效**——第 24 节已交付 `WhitelistSandbox`、`PermissiveSandbox` 已按裁决 3 整类删除，故 `read_file /etc/passwd` **现在会在真正读文件之前被拦**（抛 `SandboxViolationException`，消息形如 `路径不在白名单内: /etc/passwd`）。**后半段（仲裁 3）仍然完全成立**，且**不因窗口期关闭而改变**：记忆文件 IO **依旧不调** `Sandbox.enforce`——理由是路径为编译期常量、模型无法指向别处，与沙箱是「劝阻级还是强制」无关。**原文保留以留痕**。
 
 ## 先排除已被单测覆盖的（手工再验一遍不是测试，是重做）
 

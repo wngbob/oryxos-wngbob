@@ -455,6 +455,8 @@ git diff -- oryxos-tool/src/main/java/io/oryxlabs/oryxos/tool/notify/WebhookNoti
 > **2026-10-15 修订注**：本段原写「手工 `INSERT` 一行渠道（Step 5）」与「反向验在 Step 6 / Step 7」——那是补强① 当时的形态。补强② 把 Step 5 换成 CLI 三条命令、反向验收挪到 Step 7，Step 8 单列 `type` 拼错。原句保留在此以留痕。
 
 > **⚠️ 这次人工验收 MUST NOT 被当成「沙箱已就位」的证据**：第 20~23 节挂的是临时实现 `PermissiveSandbox`（**不拦任何东西**），`open.feishu.cn` 的域名白名单**归第 24 节**。向导已写明这一点（正文「前置事实 ④」与附录 B）。
+>
+> **2026-10-17 修订注（沙箱窗口期已关闭）**：上面这条**已失效**。第 24 节已交付 `WhitelistSandbox`，`open.feishu.cn` / `open.larksuite.com` / `qyapi.weixin.qq.com` 三个域名**已进随包默认** `http.allowed_domains`；`PermissiveSandbox` 已按裁决 3 **整类删除**。故**这次人工验收现在可以**当作「沙箱已就位」的证据。向导对应位置（正文「前置事实 ④」与附录 B）已各挂同日修订注。**原文保留以留痕**。
 
 ## 补强·十、明确不做（边界）
 
@@ -500,7 +502,11 @@ java -jar "$ORYXOS_JAR" tool list 2>&1 1>/dev/null | grep -c PermissiveSandbox  
 java -jar "$ORYXOS_JAR" profile list                     # 轻命令，仍干净
 ```
 
+> **2026-10-17 修订注（上面这个代码块里的第二条命令已失效，且是「命令与预期双双失效」）**：`PermissiveSandbox` 已按第 24 节裁决 3 **整类删除**，故 `grep -c PermissiveSandbox` 现在**恒得 `0`**，不再是 `# → 1`。两个连带的坑：① 该命令的**退出码也变成 `1`**（`grep -c` 无命中即非零），在 `set -e` 的脚本里会**直接中断**，不再像原来那样安静地打印一个数——**2026-10-17 实测确认：输出 `0`、退出码 `1`**；② 它旁边的 `wc -l # → 19` 数的是 `tool list` 的表格行数，会随内置工具数变化（第 22 节把内置工具从 13 个加到 15 个）——**2026-10-17 实测为 `21`**，**那属于另一笔账，本次未回修**，照抄前先以实际输出为准。**原文保留以留痕**；这条命令**现在不要再照抄**。
+
 **保留项**：`PermissiveSandbox` 那条 WARN **仍在 stderr 上、未被静音**——它是「沙箱窗口期」的缓解措施 ②（见 CLAUDE.md），静音它等于拆掉一条留痕。
+
+> **2026-10-17 修订注**：本条**已失效**——那条 WARN 自第 24 节起已不存在，故「保留项」无从谈起。**要保留的那条契约换了主语**：「**WARN 级诊断走 stderr、MUST NOT 被静音**」这条**通用**日志契约**仍然成立**（`LogStreamSeparationTest` 仍在守它，只是断言文案已从「PermissiveSandbox 那条 WARN」改为泛化的「WARN 级诊断」）。**原文保留以留痕**。
 
 **影响面**：**所有重命令**（`tool list` / `chat` / `serve` / `gateway`）一并受益，不是 `tool list` 独有。`chat` 的终端首屏也不再被 24 行 Hibernate INFO 占满。
 
@@ -528,6 +534,8 @@ $ ./mvnw clean verify -Ddependency-check.skip=true
 | prod 档**不含** `System.err` | 防止有人「顺手统一」，把 JSON appender 也改到 stderr（容器采集侧读 stdout） |
 | 两个 profile 块真的切出来了 | 正向对照——切分失败时前两条会以错误的方式成立（见下） |
 | dev 档根级别不是 `ERROR`/`OFF` | `PermissiveSandbox` 那条**故意**打的 WARN MUST NOT 被静音 |
+
+> **2026-10-17 修订注**：表格最后一行的**断言本身仍然成立**（`LogStreamSeparationTest` 至今仍断言「dev 档根级别不是 `ERROR`/`OFF`」，测试类仍在跑），但它的**理由已换**——`PermissiveSandbox` 那条 WARN 自第 24 节起已不存在，该断言的文案与 `@DisplayName` 已从「PermissiveSandbox 那条故意打的 WARN」改为泛化的「**WARN 级诊断 MUST NOT 被静音**」。护的东西没变，护它的那句话变了。**原文保留以留痕**。
 
 **为什么断言的是配置文本而不是运行期行为**：能验行为的地方只有 `oryxos-boot` 自己的测试（只有它的 classpath 上有这份 `logback-spring.xml`；`oryxos-cli` 的测试 classpath 上**没有**，Spring Boot 会退回默认配置，那验的是**另一套**配置）。而 `oryxos-boot` 目前**零测试基建**（无 test 源根、无 test 依赖），为一个四条断言的守点给它新开 test 源根 + 加测试依赖，比被守护的改动本身还重——故落在已有测试基建、且正是这条契约受害方的 `oryxos-cli`。
 
@@ -950,6 +958,8 @@ export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 
 **边界（仍成立）**：本次跑通**不构成**「沙箱已就位」的证据——挂的仍是 `PermissiveSandbox`，它不拦任何东西（见向导前置事实 ④ 与附录 B）。
 
+> **2026-10-17 修订注**：上面这条**已失效**，且原文里「（仍成立）」四字现在正好说反了。第 24 节已交付 `WhitelistSandbox`、`PermissiveSandbox` 已整类删除，故**本次跑通现在构成**「沙箱已就位」的证据。向导「前置事实 ④」与附录 B 已各挂同日修订注。**原文保留以留痕**。
+
 > **补充（2026-10-15 补强③ 收尾时用户明确）**：Step 6 的正向判据**确认成立**——**飞书群里收到了消息**。上面「MUST NOT 据此补写的东西」三条**仍然有效**（用户未说明 Step 7 的注入做法与对端业务码，故细节照旧不写）；本条只补上「正向那一条从『未发现问题』升格为『消息确实进群』」这一句。三档方言的真渠道验收覆盖面横向对照见补强③·十二。
 
 **口径**：本条是**记录性补记**，不改代码、不改接口、不新增公共概念；只作废四处「未跑」表述并挂带日期修订注。
@@ -1305,7 +1315,8 @@ ls: cannot access '/tmp/oryxos-wecom-check': No such file or directory
 
 - **钉钉**：用户本次裁决不做。挂账② **不结项**，收窄为「钉钉仍挂」。届时仍是「装配处映射表加一行 + 加一个实现类」——且钉钉与企微**报文完全相同**（`{"msgtype":"text","text":{"content":"..."}}`），差异只在**业务码语义**与**加签**（钉钉把 `timestamp` + HMAC-SHA256 拼进 **URL 查询串**，飞书是放**请求体**）
 - **抽公共基类**：企微档与飞书档的 `send()` 骨架 + `parseObject()` + 构造器约 60 行同形，看着该抽。**本次不抽**，三条理由：① 抽 = 改动**已交付且被 19 条测试钉死**的 `FeishuNotifyAdapter`，属软门禁②事件，收益（省 60 行）小于风险；② 项目既有裁决同向——`ProfileLoader` / `McpServerConfigLoader` / `JpaNotifyChannelRegistry` 三处 `envLookup` 刻意不合并；③ 目前只有**两档**方言。**第三次出现（钉钉）才是抽的时机**——届时抽的是 `send()` 模板方法 + `parseObject()`，各档只留 `payload()` 与「业务码字段名 + 错误文案」
-- **`qyapi.weixin.qq.com` 的沙箱域名白名单**：归第 24 节。当前挂的是临时实现 `PermissiveSandbox`（**不拦任何东西**）——**本次跑通不能当作「沙箱已就位」的证据**
+- **~~`qyapi.weixin.qq.com` 的沙箱域名白名单~~**：~~归第 24 节。当前挂的是临时实现 `PermissiveSandbox`（**不拦任何东西**）——**本次跑通不能当作「沙箱已就位」的证据**~~
+  > **2026-10-17 修订注**：**本条已结项**——第 24 节已交付 `WhitelistSandbox`，`qyapi.weixin.qq.com` **已进随包默认** `http.allowed_domains`（`oryxos-boot/src/main/resources/application.yaml`）；`PermissiveSandbox` 已按裁决 3 整类删除。故**本次跑通现在可以**当作「沙箱已就位」的证据。**原文保留以留痕**。
 - **企微「应用消息」**（需 corpid / corpsecret 换 AccessToken）：扩展阶段的专用 Adapter，与「群机器人 webhook」不是一回事
 - **企微 text 的 2048 字节上限**：不预校验——超限时企微回 `errcode` 非 0，fail-closed 判据会兜住并落审计。预校验等于在客户端维护一份对端常量
 - **`ConfigLoader` 收口 / 加密存储 / KMS**：同补强② 的边界

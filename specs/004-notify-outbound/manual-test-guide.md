@@ -42,9 +42,11 @@
 | ① | **13 个工具已在 Spring 容器里**，`notify` 可 `tool list` 出来、`chat` 里真能调 | 第 20 节装配 |
 | ② | **渠道写入面 = CLI 三条轻命令** `notify-channel add\|list\|remove`（原生 JDBC，不启 Spring）。日常配渠道**只有这一条路**，不再需要手工 `INSERT` | 2026-10-15 补强② |
 | ③ | **`type` 的合法取值由装配处的路由表决定**：`webhook` / `feishu` / `lark` / `wecom`（四个）。写歪的 `type` 在路由处报错，**一次请求都不发** | 2026-10-15 补强①，补强③ 加 `wecom` |
-| ④ | **沙箱挂的是临时实现 `PermissiveSandbox`**——它只打一条 WARN，**不拦任何东西**。`WhitelistSandbox` 本体归第 24 节 | 第 20 节（窗口期，见 `CLAUDE.md`） |
+| ④ | ~~**沙箱挂的是临时实现 `PermissiveSandbox`**——它只打一条 WARN，**不拦任何东西**。`WhitelistSandbox` 本体归第 24 节~~ **← 2026-10-17 失效，见下方修订注** | 第 20 节（窗口期，见 `CLAUDE.md`） |
 
 > **④ 有一条硬约束**：本向导跑通**不能**当作「沙箱已就位」的证据。终端上那条 `PermissiveSandbox` 的 **WARN 是故意打的，不是报错**，MUST NOT 被静音。
+>
+> **2026-10-17 修订注（沙箱窗口期已关闭）**：④ 与紧邻的这条硬约束**同时失效**。`PermissiveSandbox` 已按第 24 节裁决 3 **整类删除**（`grep -rn "PermissiveSandbox" oryxos-*/src` 零命中），现挂的是 `WhitelistSandbox`，三类白名单真在校验。故：**本向导跑通现在可以**当作「沙箱已就位」的证据；`open.feishu.cn` / `open.larksuite.com` / `qyapi.weixin.qq.com` 三个域名已进随包默认 `http.allowed_domains`（`oryxos-boot/src/main/resources/application.yaml`）。**原文保留以留痕**。另注意：「WARN 级诊断走 stderr、MUST NOT 被静音」这条**通用**日志契约**仍然成立**——它不随那条 WARN 消失而消失，只是那条 WARN 本身已不存在。
 >
 > **凭证纪律（贯穿全页）**：webhook 地址里的 token 与签名密钥是**同一等级的凭证**。本页所有命令里它们都写成 `${ENV_VAR}` 占位符。**MUST NOT** 把真实值粘进对话、日志、报错或命令输出（FR-019）。库文件里存的也是**占位符字面量**，真值只活在环境变量里。
 
@@ -237,6 +239,10 @@ java -jar "$ORYXOS_JAR" tool list
 > **第二条也是「修复在不在你手上这份 jar 里」的判据**：`19` = 修好了；`46` 左右 = 你跑的是旧 jar（回 Step 0 看 `dist/` 警告）。
 >
 > 日志里那条 `PermissiveSandbox` 的 **WARN 是故意打的**（沙箱窗口期），**不是报错**。
+>
+> **2026-10-17 修订注**：上面这条**已失效**——那条 WARN 自第 24 节起**根本不会再出现**（`PermissiveSandbox` 已整类删除）。看到它只可能是你在跑第 24 节之前的旧 jar。**原文保留以留痕**。
+>
+> **⚠️ 同段的 `wc -l` → `19` 也过期了（实测 `21`）**：那个数字数的是 `tool list` 的表格行数，会随内置工具数变化——第 22 节把内置工具从 13 个加到 15 个，故它不再是 `19`。**2026-10-17 在第 24 节后的 jar 上实测：`21`**（`builtin (15)` 一段 + `annotation (0)` / `mcp (0)` 各两行 + 首行「Tool（共 15 个）:」）。**本次只回修「沙箱窗口期」这一类失效；工具数变化引起的失效是另一笔账，未在此处理**——照抄前以实际输出为准。
 
 ---
 
@@ -505,6 +511,7 @@ unset FEISHU_HOOK_URL FEISHU_BOT_SECRET
 3. **在错误的目录跑** —— 库文件是相对的 `.oryxos/oryxos.db`。在仓库根跑会用到仓库自己的库（而且会污染仓库）。
 4. **把模型的措辞当证据** —— 模型可能把错误转述得不准确。**以 `tool_invocations` 为准。**
 5. **把重命令的启动日志当成报错** —— `tool list` / `chat` 是重命令（起 Spring 上下文），终端上会先刷一段 Spring / Hibernate 的 INFO，**它们在 stderr 上**（2026-10-15 起与 stdout 分流）。其中 `PermissiveSandbox` 那条 **WARN 是故意**打的。
+   > **2026-10-17 修订注**：本条第 2 句（`PermissiveSandbox` 那条 WARN）**已失效**——该类自第 24 节起已整类删除，启动时不会再打它。**第 1 句仍完全成立**（重命令启动日志走 stderr，别当报错），本条其余部分不受影响。**原文保留以留痕**。
 6. **凭证泄进输出** —— 任何一步的输出里都不该出现 token / secret。Step 5 的核对脚本**故意只打布尔值与键名**；如果你自己写核对命令，也照这个来。
 
 ---
@@ -732,7 +739,8 @@ grep -nE 'WebhookNotifyAdapter|JpaNotifyChannelRegistry' \
 
 - **~~企业微信~~**：**2026-10-15 补强③ 已做**（`WeComNotifyAdapter`，`type=wecom`，见 Step 5b）。走的正是原先记下的那条路——「往 `CliAssemblyConfiguration` 的映射表加一行 + 加一个实现类」，**接口与调用方零改动**。这是「接口先行」那条升级路径的**第二次**实际兑现（第一次是飞书档）。
 - **钉钉**：协议已知，且**报文与企微完全相同**（`{"msgtype":"text","text":{"content":"..."}}`，课件 §6.2），差异只在**业务码语义**与**加签**——钉钉的加签是把 `timestamp` + HMAC-SHA256 拼进 **URL 查询串**（飞书是放**请求体**）。**本次仍未做**（用户 2026-10-15 裁决收窄到只做企微）。路由接缝已就位，加它仍是「映射表加一行 + 加一个实现类」，**接口与调用方零改动**。届时**也是抽公共基类的时机**——企微与飞书两档的 `send()` 骨架已刻意重复了一次，第三次出现按规则三该抽了。
-- **`open.feishu.cn` / `open.larksuite.com` / `qyapi.weixin.qq.com` 的沙箱域名白名单**：归第 24 节。当前挂的是临时实现 `PermissiveSandbox`（**不拦任何东西**）——所以本页跑通**不能**当作「沙箱已就位」的证据。
+- **~~`open.feishu.cn` / `open.larksuite.com` / `qyapi.weixin.qq.com` 的沙箱域名白名单~~**：~~归第 24 节。当前挂的是临时实现 `PermissiveSandbox`（**不拦任何东西**）——所以本页跑通**不能**当作「沙箱已就位」的证据。~~
+  > **2026-10-17 修订注**：**本条已结项**。第 24 节已交付 `WhitelistSandbox`，三个域名**已进随包默认** `http.allowed_domains`（`oryxos-boot/src/main/resources/application.yaml`）；`PermissiveSandbox` 已按裁决 3 整类删除。故**本页跑通现在可以**当作「沙箱已就位」的证据。**原文保留以留痕**。
 - **REST CRUD 与管理台**：`/api/v1/notify-channels` 的端点与 `NotifyChannelRegistry` 的写方法仍归第 26 节。写入面走 CLI 原生 JDBC，**没有动那个接缝**。
 - **写入时的 `type` 取值校验**：CLI 不做（合法取值由装配处路由表决定，见 Step 8）。
 - **`ConfigLoader` 收口**：`${ENV_VAR}` 解析目前有三处各持一份（`ProfileLoader` / `McpServerConfigLoader` / `JpaNotifyChannelRegistry`），**失败策略三处刻意不同**（抛 / 跳过整个 server / 抛）。合并是一次独立的收口，不该折进这一节。
