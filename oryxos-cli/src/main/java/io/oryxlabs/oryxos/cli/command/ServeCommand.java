@@ -2,6 +2,7 @@ package io.oryxlabs.oryxos.cli.command;
 
 import io.oryxlabs.oryxos.cli.CliApplication;
 import io.oryxlabs.oryxos.cli.workspace.Workspace;
+import io.oryxlabs.oryxos.core.schedule.AgentScheduler;
 import java.util.concurrent.CountDownLatch;
 import org.springframework.boot.Banner;
 import org.springframework.boot.WebApplicationType;
@@ -43,6 +44,8 @@ public final class ServeCommand implements Runnable {
             .web(WebApplicationType.NONE)
             .bannerMode(Banner.Mode.OFF)
             .run()) {
+      // 定时任务只在常驻模式注册（FR-012 / 裁决 3）：chat 不碰这一行，装配处也不碰
+      context.getBean(AgentScheduler.class).registerAll();
       System.out.println("serve 模式已启动（Bean 数 " + context.getBeanDefinitionCount() + "）");
       System.out.println("本模式将提供 HTTP 接入，REST 端点在第 26 节接入");
       System.out.println("已接受 --port " + port + "；端口在第 26 节启用");

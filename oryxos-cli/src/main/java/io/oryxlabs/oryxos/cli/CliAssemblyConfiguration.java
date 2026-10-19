@@ -13,6 +13,7 @@ import io.oryxlabs.oryxos.core.memory.MemorySource;
 import io.oryxlabs.oryxos.core.profile.Profile;
 import io.oryxlabs.oryxos.core.profile.ProfileLoader;
 import io.oryxlabs.oryxos.core.profile.ProfileRegistry;
+import io.oryxlabs.oryxos.core.schedule.AgentScheduler;
 import io.oryxlabs.oryxos.core.session.JpaSessionService;
 import io.oryxlabs.oryxos.core.session.SessionService;
 import io.oryxlabs.oryxos.core.tool.OryxTool;
@@ -71,6 +72,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 /**
  * 重命令的 Bean 装配——<b>全部 {@code @Bean} 的唯一落点</b>（contracts/cli-assembly.md §3 / §4 / §5）。
@@ -408,6 +410,11 @@ public class CliAssemblyConfiguration {
    * <p><b>重命令一律挂终端档</b>：{@code chat} / {@code serve} / {@code gateway} 都有人在终端或另一端，{@code ask_user}
    * 能真的问出去。挂 {@code UnsupportedUserInteraction} 的场合是「压根没有人」（定时任务、无状态调用），那两处的装配归第 25 / 26 节。
    *
+   * <p><b>2026-10-18 修订注（第 25 节）</b>：上句「那两处的装配归第 25 / 26 节」的挂账对定时任务<b>不成立</b>—— 第 25 节裁决 4 明确「定时任务的
+   * {@code ask_user} 分档本节不做，记为已知边界」：钟推复用本条命令的上下文， {@code ask_user}
+   * 在钟推里会去读<b>调度线程的</b>终端（多半读不到、阻塞到超时）。分档（定时任务注入 {@code
+   * UnsupportedUserInteraction}，拿到「没人可问」的明确报错）归扩展阶段评估，原文不重写。
+   *
    * <p><b>两档实现都在，装配处显式选一档</b>——这正是 FR-017 要的形状：工具只负责递问题、带回答，「能不能问」由这里决定。
    *
    * @return 读终端的交互实现
@@ -660,6 +667,49 @@ public class CliAssemblyConfiguration {
   @ConditionalOnMissingBean(MemorySource.class)
   public MemorySource memorySource() {
     return new EmptyMemorySource();
+  }
+
+  /**
+   * 定时任务的调度线程池（第 25 节，contracts/agent-scheduler.md §4.1）。
+   *
+   * <p><b>固定小池、不做配置键</b>（FR-019）：池大小是本节唯一一处「跨任务并发度」的旋钮——同时到点的不同任务最多 2
+   * 个并发、超出的排队等待；做成配置键等于把这条行为承诺变成运维可改的不确定性。
+   *
+   * <p><b>不加 {@code @EnableScheduling}</b>：本节的注册是命令体里的显式调用，不是注解扫描；加了会把 Spring 自己的
+   * {@code @Scheduled} 扫描打开，是第二真相源。
+   *
+   * @return 调度线程池，线程名前缀 {@code oryxos-scheduler-}
+   */
+  @Bean
+  public ThreadPoolTaskScheduler taskScheduler() {
+    ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+    // FR-019：固定小池，不做配置键
+    scheduler.setPoolSize(2);
+    scheduler.setThreadNamePrefix("oryxos-scheduler-");
+    return scheduler;
+  }
+
+  /**
+   * 定时任务（钟推，第 25 节）。
+   *
+   * <p><b>注册时机在命令体而不是 {@code @PostConstruct}</b>（裁决 3 / FR-012）：定时任务 MUST 只在常驻模式 （{@code serve} /
+   * {@code gateway}）调度，交互式的 {@code chat} 起一个 Spring 上下文不该捎带注册。若在这里或 类上用 {@code @PostConstruct} /
+   * {@code @Component}，「起上下文即注册」，{@code chat} 也会注册——所以本方法只 把对象造出来，注册调用归 {@code serve} / {@code
+   * gateway} 的命令体。
+   *
+   * @param taskScheduler 调度线程池
+   * @param profileRegistry 已装载 Profile 的内存索引（schedules 段的来源）
+   * @param agentService 三种触发源的统一处理入口
+   * @param sessionService 钟推会话的取或建接缝
+   * @return 定时任务调度器
+   */
+  @Bean
+  public AgentScheduler agentScheduler(
+      ThreadPoolTaskScheduler taskScheduler,
+      ProfileRegistry profileRegistry,
+      AgentService agentService,
+      SessionService sessionService) {
+    return new AgentScheduler(taskScheduler, profileRegistry, agentService, sessionService);
   }
 
   /**

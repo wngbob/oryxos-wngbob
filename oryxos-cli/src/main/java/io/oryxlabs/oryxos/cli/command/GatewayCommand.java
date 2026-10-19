@@ -2,6 +2,7 @@ package io.oryxlabs.oryxos.cli.command;
 
 import io.oryxlabs.oryxos.cli.CliApplication;
 import io.oryxlabs.oryxos.cli.workspace.Workspace;
+import io.oryxlabs.oryxos.core.schedule.AgentScheduler;
 import org.springframework.boot.Banner;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -31,6 +32,8 @@ public final class GatewayCommand implements Runnable {
             .web(WebApplicationType.NONE)
             .bannerMode(Banner.Mode.OFF)
             .run()) {
+      // 定时任务只在常驻模式注册（FR-012 / 裁决 3）：chat 不碰这一行，装配处也不碰
+      context.getBean(AgentScheduler.class).registerAll();
       System.out.println("gateway 模式已启动（Bean 数 " + context.getBeanDefinitionCount() + "）");
       System.out.println("本模式将挂载入站 Channel，通道接入在扩展阶段");
       System.out.println("前台常驻中，Ctrl+C 退出。");

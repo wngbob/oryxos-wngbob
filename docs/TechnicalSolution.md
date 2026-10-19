@@ -532,6 +532,15 @@ Channel 是 Agent 对外的消息接入入口，主要解决"消息进来、响�
 
 **会话身份。** 钟推也要落 Session：`session_id` 沿用既有公式（channel + user + profile 联合生成，见 9.2），channel 和 user 都固定为 `scheduler`。即同一个 Profile 的历次定时触发复用同一个 Session，对话历史自然累积、靠 `max_history_turns` 截断兜底——不为钟推新设任何概念。
 
+> **实现回填（2026-10-18，第 25 节）**：本节实现口径与本段的差异与细化，逐条如下。
+> ① **cron 契约以 5 段 Unix cron 为准、兼容 6 段**：5 段（`分 时 日 月 周`）在注册时前补秒位 `0 ` 归一化成 6 段，6 段（Spring 原生方言）原样透传，其余段数与缺失一律报错并指名 Agent 与任务。归一化只发生在 `AgentScheduler` 内部一处，不回写 Profile、不进 `ProfileLoader`。
+> ② **任务 id = `<profileName>#<配置内序号>`**（序号从 1 起，确定性派生、不去重）——承载调度视图的 `ScheduleConfig(id/cron/zone/message)` 是本节新建的记录类，落在 `oryxos-core` 的 `schedule` 包；`Profile.ScheduleSpec` 一字未改。
+> ③ **调度线程池固定 2 线程**（`ThreadPoolTaskScheduler`，线程名前缀 `oryxos-scheduler-`），**不做配置键**：池大小是本节唯一一处「跨任务并发度」的旋钮，做成配置键等于把行为承诺变成运维可改的不确定性。
+> ④ **失败隔离的宽度是 `Exception`**：`runOnce` 里 `catch (Exception e)` 记 ERROR 后不外抛，锁在 `finally` 里释放——「失败不崩、留痕可查」两条都靠这一处；本节**新增审计代码 0 行**，失败落库全部经由 `AgentService.process` 内部既有路径。
+> ⑤ **`ask_user` 在钟推里的分档不做**（已知边界）：定时任务复用命令体那一个 `UserInteraction` 档（终端档），钟推里调 `ask_user` 会去读**调度线程的**终端——多半读不到、阻塞到超时。分档（给钟推注入「没人可问」的明确报错）归扩展阶段评估。
+
+> **2026-10-18 修订注（第 25 节）**：上面 `AgentScheduler` 段末句「**OryxOS 启动时**扫描所有 Profile 的 `schedules` 字段逐个注册」与 8.6 表格里「定时任务随 `serve`/`gateway` 一起常驻调度」措辞不一致，**以 8.6 为准**——注册只发生在 `serve` / `gateway` 命令体里的显式调用（`AgentScheduler` 刻意不带 `@Component` / `@PostConstruct`），交互式的 `chat` 起 Spring 上下文**不**捎带注册定时任务。原文不重写，以本注为准。
+
 **状态持久化与可管理（第 28 节补齐）。** 光"到点自动跑"还不够——运营方要能看见有哪些定时任务、跑过几次、上次成没成，也要能手动补跑一次、临时停掉一个任务。为此把任务状态和执行历史落 SQLite（重启不丢），并做成管理台的一等公民：
 
 - **两张表**（手工建表脚本，见 9.2）：`scheduled_tasks` 存任务登记信息与运行状态（全局 `schedule_id` 主键、`profile_name`、Agent 内的 `schedule_key`、展示 `display_name`、`cron`、`zone`、`message` 与运行态字段）；`task_executions` 存每次执行的历史（`schedule_id`、`session_id`、`started_at`、`success`、`error_message`、`duration_ms`）。定义来源仍是 Agent 的 `schedules`——这两张表只存“状态 + 历史”，不作为定义源，重启时从文件重新协调。
