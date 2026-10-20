@@ -132,6 +132,23 @@ class AdminConsoleSourceTest {
     assertThat(source).as("概览页必须读取运行时状态数据（四个既有端点），不是静态介绍页").contains("from '../api.js'");
   }
 
+  /**
+   * 会话页在 2026-10-20（第 27 节）从「粘贴会话 ID 查询」改成「先读列表、点一行看详情」。
+   *
+   * <p><b>为什么单独一条而不是只加进 {@link #VIEW_ENDPOINTS}</b>：映射表用的是 {@code contains}，而详情路径 {@code
+   * /api/v1/sessions/{id}} 本身就包含列表路径这个前缀——只把它加进表里，判据会被详情调用「顺带满足」， 等于没判。这条断言卡住调用的字面形状：列表调用不带
+   * id，详情调用带 id。
+   */
+  @Test
+  void sessionsViewReadsTheListEndpoint() throws IOException {
+    String source =
+        Files.readString(VIEWS_ROOT.resolve("SessionsView.vue"), StandardCharsets.UTF_8);
+    assertThat(source)
+        .as("会话页必须从 GET /api/v1/sessions 读列表，详情仍走带会话 ID 的那条路径")
+        .contains("get('/api/v1/sessions'")
+        .contains("get('/api/v1/sessions/'");
+  }
+
   @Test
   void eachViewReferencesItsEndpoint() throws IOException {
     for (Map.Entry<String, List<String>> entry : VIEW_ENDPOINTS.entrySet()) {

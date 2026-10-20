@@ -42,7 +42,7 @@
 | `/admin/assets/index-*.js` | 200，`Cache-Control: max-age=31536000, public, immutable` |
 | `/admin/assets/nope.js` | **404**（真 404，不回落成 index） |
 | `/api/v1/nope` | **404** 统一信封（API 路径不参与 SPA 回落） |
-| `/swagger-ui` | 302 → `/swagger-ui/index.html`（200）；`/v3/api-docs` 里**恰好 10 个** operation（6 组，逐条对得上契约） |
+| `/swagger-ui` | 302 → `/swagger-ui/index.html`（200）；`/v3/api-docs` 里**恰好 10 个** operation（6 组，逐条对得上契约）。**2026-10-20 修订注（第 27 节）**：第 27 节补了 `GET /api/v1/sessions`，现为 **11 个**——重跑本向导时按 11 判，见 `specs/010-human-trigger-flow/` |
 | 本机 `sqlite3` CLI | **不存在**。查库统一走 `python3`（`sqlite3` 模块） |
 
 **没实测的是浏览器里那两件事**：七个页面的渲染效果（含 2026-10-20 新增的概览页、定时任务页与徽标）、页面上确实没有写操作入口（源码层由 `AdminConsoleSourceTest` 判，视觉层要人看）。**其余步骤你只需要照做一遍确认「在我这台机器上也一样」**。
@@ -392,6 +392,8 @@ curl -s localhost:8080/api/v1/sessions/cli:local:smoke | python3 -m json.tool
 
 > **2026-10-20 修订注（同日三次）**：上一版这一节是「依次点左侧五项、`/admin/` 落在会话页」。① 先加**概览页**并置为第一项（落地页 `/admin/overview`）；② 随后按用户澄清把概览页从「静态介绍」改成**运行时状态总览**，判据相应从「它不发请求」改为「它的数字与四个查询端点一致」；③ 当日再加**定时任务页**（导航第 5 项，判据见上面第 2 条），导航现为**七项**。用户同日要求的「渠道列表」页**本轮不做**——`notify_channels` 没有查询端点，加它要新造 REST 路径，经用户裁决改挂扩展阶段。新增第 7 条徽标判据。**本节尚未按新版人工走一遍**——用户 2026-10-20 执行 Step 0~9 是在概览页存在之前，留痕见 `acceptance-report.md` §四 第 6 项。
 
+> **2026-10-20 修订注（第 27 节交付）**：上面第 3 条已失效——第 27 节交付了 `GET /api/v1/sessions`，会话页改为「**列表 + 点一行看详情**」，「没有会话列表端点」不再成立。重跑本向导时按新形态判，见 `specs/010-human-trigger-flow/manual-test-guide.md` Step 7。
+
 ---
 
 ## Step 8：交互式文档（浏览器）
@@ -399,6 +401,8 @@ curl -s localhost:8080/api/v1/sessions/cli:local:smoke | python3 -m json.tool
 打开 `http://localhost:8080/swagger-ui`（会自动跳到 `/swagger-ui/index.html`）。
 
 **判据**：**10 个**操作全部列出（会话 4 / Agent 调用 1 / 信息查询 3 / 系统状态 2），分组清晰；随便挑一个 GET 点 `Try it out` 能返回真实数据。
+
+> **2026-10-20 修订注（第 27 节交付）**：上一条的「10 个」已过期——第 27 节补了 `GET /api/v1/sessions`，现为 **11 个**（会话 **5** 个：创建 / 列表 / 发消息 / 查历史 / 归档；其余三组不变）。重跑本向导时按 11 判，原文保留。
 
 ---
 

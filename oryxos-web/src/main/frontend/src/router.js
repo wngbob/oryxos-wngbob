@@ -21,7 +21,7 @@ export const BASE_PATH = '/admin/'
  */
 export const ROUTES = [
   { path: '/overview', label: '概览', hint: 'Agent、会话、工具与运行状态', code: 'OVERVIEW' },
-  { path: '/sessions', label: '会话', hint: '按会话 ID 查询', code: 'SESSIONS' },
+  { path: '/sessions', label: '会话', hint: '最近活跃的会话与历史', code: 'SESSIONS' },
   { path: '/profiles', label: 'Agent', hint: 'Agent 列表与配置有效性', code: 'AGENTS' },
   { path: '/tools', label: '工具', hint: '已注册工具与来源', code: 'TOOLS' },
   {

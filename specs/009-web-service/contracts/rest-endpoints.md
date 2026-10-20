@@ -4,6 +4,8 @@
 
 本文件是本节 10 个端点的**逐字实现契约**。与 `specs/000-runtime-kernel/contracts/rest-api.md` 冲突时以**本文件**为准（本文件是它的本节修订版：字段名对齐裁决 ⑪、`/health` 措辞对齐裁决 ⑤、补两条错误文案）；`rest-api.md` 同步挂带日期（2026-10-19）修订注，原文不重写。
 
+> **2026-10-20 修订注（第 27 节）**：核心阶段端点已由 10 个增至 **11** 个——第 27 节补了 `GET /api/v1/sessions`（最近 100 条会话摘要，不含 `messages`；`?status=active|archived` 可选，过滤作用于该窗口内，非法值 400）。本文件其余十个端点的逐字契约不变；新端点的契约与验收见 `specs/010-human-trigger-flow/`。
+
 **通用约定**
 
 - 基址：`/api/v1`，只在 `oryxos serve` 下提供（`chat` / `gateway` 不起 HTTP 容器）。

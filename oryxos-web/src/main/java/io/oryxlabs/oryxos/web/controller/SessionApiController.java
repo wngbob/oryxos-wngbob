@@ -12,6 +12,7 @@ import io.oryxlabs.oryxos.web.controller.dto.CreateSessionRequest;
 import io.oryxlabs.oryxos.web.controller.dto.MessageRequest;
 import io.oryxlabs.oryxos.web.controller.dto.MessageResponse;
 import io.oryxlabs.oryxos.web.controller.dto.MessageView;
+import io.oryxlabs.oryxos.web.controller.dto.SessionSummaryView;
 import io.oryxlabs.oryxos.web.controller.dto.SessionView;
 import io.oryxlabs.oryxos.web.error.ProfileNotFoundException;
 import io.oryxlabs.oryxos.web.error.SessionNotFoundException;
@@ -23,10 +24,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 会话管理四端点（contracts/rest-endpoints.md §1）。
+ * 会话管理端点（contracts/rest-endpoints.md §1；第 27 节新增 {@code GET /api/v1/sessions} 列表）。
  *
  * <p><b>本层只做三件事</b>：参数校验、响应包装、错误处理（FR-003）。发消息<b>汇入与 {@code oryxos chat} 完全相同的 {@code
  * AgentService.process}</b>——HTTP 层不另起处理链路（FR-002）。
@@ -58,6 +60,9 @@ public class SessionApiController {
 
   /** 会话历史最多返回最近 100 条（FR-009）。 */
   private static final int MAX_HISTORY = 100;
+
+  /** 会话列表默认最多返回最近 100 条（第 27 节；与详情的历史上限同口径）。 */
+  private static final int MAX_LIST = 100;
 
   private final SessionService sessionService;
   private final AgentService agentService;
@@ -96,6 +101,29 @@ public class SessionApiController {
     // 已存在的会话走更新路径，写回的是同一份内容，幂等。
     sessionService.save(session);
     return ApiResponse.ok(toView(session, null));
+  }
+
+  /**
+   * 列出最近活跃的会话摘要（第 27 节）。
+   *
+   * <p><b>按最后活跃时间倒序、最多 100 条</b>：列表回答的是「有哪些会话」，不是「每个会话说过什么」， 故不带 {@code messages} 正文；要看对话内容走 {@code
+   * GET /api/v1/sessions/{id}}。
+   *
+   * <p><b>{@code status} 过滤作用在「最近 100 条」这个窗口之内</b>：先取最近 100 条再筛，而不是先筛全表再截断——
+   * 后者要么把全表拉进内存、要么逼接缝再长出一个「按状态 + 限量」的方法，两者都超出本节范围。 核心阶段单机会话量下，100 条窗口够用；真要全量分页是扩展阶段的事。
+   *
+   * @param status 可选过滤：{@code active} 或 {@code archived}；缺省返回两种状态
+   * @return 会话摘要列表，按最后活跃时间倒序
+   */
+  @GetMapping
+  public ApiResponse<List<SessionSummaryView>> list(@RequestParam(required = false) String status) {
+    String wanted = normalizeStatus(status);
+    List<SessionSummaryView> summaries =
+        sessionService.listRecent(MAX_LIST).stream()
+            .filter(session -> wanted == null || wanted.equals(session.status()))
+            .map(SessionApiController::toSummary)
+            .toList();
+    return ApiResponse.ok(summaries);
   }
 
   /**
@@ -161,6 +189,41 @@ public class SessionApiController {
     if (profileRegistry.find(profileName).isEmpty()) {
       throw new ProfileNotFoundException(profileName);
     }
+  }
+
+  /**
+   * 归一化并校验 {@code ?status=}：缺省 / 空白返回 {@code null}（= 不过滤）。
+   *
+   * <p><b>写错就报错、不静默忽略</b>：忽略过滤条件会返回一份「看起来对」的混合列表，调用方以为筛过了—— 与第 19 节「未知 type MUST NOT 静默退回通用档」同一条理由。
+   */
+  @SuppressFBWarnings(
+      value = "IMPROPER_UNICODE",
+      justification =
+          "折叠用 Locale.ROOT（该规则要求的口径），目标值只有 active / archived 两个 ASCII 字面量，"
+              + "折叠结果只用于与它们整串相等比对；任何不一致的方向都是拒绝（400），属 FindSecBugs 对"
+              + "「不可信输入参与大小写比对」的误报")
+  private static String normalizeStatus(String status) {
+    if (status == null || status.isBlank()) {
+      return null;
+    }
+    String normalized = status.toLowerCase(Locale.ROOT);
+    if (!Session.STATUS_ACTIVE.equals(normalized) && !Session.STATUS_ARCHIVED.equals(normalized)) {
+      throw new IllegalArgumentException(
+          "status must be one of: " + Session.STATUS_ACTIVE + ", " + Session.STATUS_ARCHIVED);
+    }
+    return normalized;
+  }
+
+  private static SessionSummaryView toSummary(Session session) {
+    return new SessionSummaryView(
+        session.id(),
+        session.profileName(),
+        session.channel(),
+        session.userId(),
+        session.status(),
+        session.createdAt(),
+        session.lastActiveAt(),
+        session.messages().size());
   }
 
   private static List<MessageView> recentMessages(Session session) {

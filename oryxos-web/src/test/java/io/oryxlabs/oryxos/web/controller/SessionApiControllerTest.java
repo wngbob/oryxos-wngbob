@@ -19,8 +19,11 @@ import io.oryxlabs.oryxos.core.engine.AgentService;
 import io.oryxlabs.oryxos.core.profile.Profile;
 import io.oryxlabs.oryxos.core.profile.ProfileRegistry;
 import io.oryxlabs.oryxos.core.session.Session;
+import io.oryxlabs.oryxos.core.session.SessionMessage;
 import io.oryxlabs.oryxos.core.session.SessionService;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -32,7 +35,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * 会话四端点的验收测试（课件第 26 节「验收 harness」/ contracts/rest-endpoints.md §1）。
+ * 会话端点的验收测试（课件第 26 节「验收 harness」/ contracts/rest-endpoints.md §1；第 27 节补列表端点）。
  *
  * <p>守点：超 32KB → 400 且<b>零次</b>模型调用；会话不存在 → 404；正常请求下 {@code agentService.process} <b>恰好一次</b>
  * （Controller 没夹带私货，FR-002）；归档会话再发消息 → 400 且不复活；历史最多最近 100 条、按时间正序；归档幂等。
@@ -209,12 +212,75 @@ class SessionApiControllerTest {
     verify(sessionService).save(created);
   }
 
+  @Test
+  @DisplayName("会话列表：默认取最近 100 条，只回摘要、不带对话正文（第 27 节）")
+  void list_returnsSummariesWithoutMessages() throws Exception {
+    Session newer = summarySession("web:alice:newer", Session.STATUS_ACTIVE, 2);
+    Session older = summarySession("web:alice:older", Session.STATUS_ARCHIVED, 0);
+    when(sessionService.listRecent(100)).thenReturn(List.of(newer, older));
+
+    mockMvc
+        .perform(get("/api/v1/sessions"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.length()").value(2))
+        .andExpect(jsonPath("$.data[0].sessionId").value("web:alice:newer"))
+        .andExpect(jsonPath("$.data[0].profile").value("daily-weather"))
+        .andExpect(jsonPath("$.data[0].messageCount").value(2))
+        .andExpect(jsonPath("$.data[0].lastActiveAt").exists())
+        // 列表不搬正文：一次 100 条若各带完整历史，响应体会随对话轮数无限膨胀
+        .andExpect(jsonPath("$.data[0].messages").doesNotExist())
+        .andExpect(jsonPath("$.data[1].status").value(Session.STATUS_ARCHIVED));
+  }
+
+  @Test
+  @DisplayName("会话列表：?status=active 只回活跃会话，取值大小写不敏感")
+  void list_filtersByStatus() throws Exception {
+    Session active = summarySession("web:alice:active", Session.STATUS_ACTIVE, 1);
+    Session archived = summarySession("web:alice:archived", Session.STATUS_ARCHIVED, 1);
+    when(sessionService.listRecent(100)).thenReturn(List.of(active, archived));
+
+    mockMvc
+        .perform(get("/api/v1/sessions").param("status", "ACTIVE"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.length()").value(1))
+        .andExpect(jsonPath("$.data[0].sessionId").value("web:alice:active"));
+  }
+
+  @Test
+  @DisplayName("会话列表：status 拼错 → 400 并列出合法取值，不静默忽略过滤条件")
+  void list_unknownStatus_returns400() throws Exception {
+    mockMvc
+        .perform(get("/api/v1/sessions").param("status", "deleted"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value(400))
+        .andExpect(jsonPath("$.message").value("status must be one of: active, archived"));
+  }
+
   private void givenSession(Session session) {
     when(sessionService.get(SESSION_ID)).thenReturn(Optional.of(session));
   }
 
   private Session activeSession() {
     return Session.create(SESSION_ID, "web", "alice", "daily-weather");
+  }
+
+  /** 列表只读这几个字段，替身按需给——{@code Session.create} 造不出「有历史且时间可控」的行。 */
+  private Session summarySession(String id, String status, int messageCount) {
+    Session session = mock(Session.class);
+    when(session.id()).thenReturn(id);
+    when(session.profileName()).thenReturn("daily-weather");
+    when(session.channel()).thenReturn("web");
+    when(session.userId()).thenReturn("alice");
+    when(session.status()).thenReturn(status);
+    when(session.createdAt()).thenReturn(Instant.parse("2026-10-20T08:00:00Z"));
+    when(session.lastActiveAt()).thenReturn(Instant.parse("2026-10-20T09:00:00Z"));
+    List<SessionMessage> messages = new ArrayList<>();
+    for (int i = 0; i < messageCount; i++) {
+      messages.add(
+          new SessionMessage(SessionMessage.Role.USER, "m" + i, null, null, Instant.now()));
+    }
+    when(session.messages()).thenReturn(messages);
+    return session;
   }
 
   private String json(Object value) throws Exception {

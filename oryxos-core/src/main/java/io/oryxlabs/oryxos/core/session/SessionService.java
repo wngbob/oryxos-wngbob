@@ -1,5 +1,6 @@
 package io.oryxlabs.oryxos.core.session;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -59,4 +60,17 @@ public interface SessionService {
    * @return {@code status="active"} 的会话行数
    */
   long countActive();
+
+  /**
+   * 列出最近活跃的会话（第 27 节 {@code GET /api/v1/sessions} 的数据源）。
+   *
+   * <p><b>按最后活跃时间倒序</b>：管理台与对账要看到的是「刚刚说过话的那些」，不是按创建时间排出的历史档案。 条目形状仍是完整的 {@link
+   * Session}，由调用方决定要不要裁成摘要——本接缝不替它定义对外视图。
+   *
+   * <p><b>查询在本层收口</b>：分页 / 排序的实现细节（{@code JpaRepository.findAll(Sort)}）不外泄到控制器； 控制器只传「要几条」。
+   *
+   * @param limit 最多返回几条；{@code <= 0} 时返回空表（不抛异常——「要零条」是合法的调用意图）
+   * @return 最近活跃的会话，数量不超过 {@code limit}
+   */
+  List<Session> listRecent(int limit);
 }

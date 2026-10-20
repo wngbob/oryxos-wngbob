@@ -13,6 +13,10 @@ import java.nio.file.Paths;
  * <p><b>根路径基准是进程当前目录</b>：{@code oryxos init} 在当前目录建 {@code .oryxos/}，其余命令也在当前目录找它。
  * 本节不引入「工作区根可配置」的配置键——没有调用方会设它，凭空多一个配置键就是凭空多一处真相（章程原则 II）。
  *
+ * <p><b>第 27 节修订注（2026-10-20）</b>：上一段「不引入可配置根」的结论被本节推翻——整机测试要 hermetic（指向临时工作区、不读开发者机器上的真实目录）， 故
+ * {@link #current()} 支持系统属性 {@value #ROOT_PROPERTY} 覆盖<b>工作区根本身</b>；不设置时默认仍是当前目录下的 {@code
+ * .oryxos}，命令行行为一字未改。刻意做成<b>系统属性</b>而不是配置键：它服务于「进程级隔离」，不是给运维调的参数。
+ *
  * <p><b>轻命令与重命令共用本类</b>：轻命令不经 Spring，直接 {@link #current()} 取；重命令由装配类注册成 Bean
  * （contracts/cli-assembly.md §5）。两条路径的根路径算法是同一个方法，不会漂移。
  */
@@ -27,6 +31,9 @@ public final class Workspace {
   /** SQLite 库文件名，轻命令的原生 JDBC 路径连它。 */
   private static final String DB_FILE = "oryxos.db";
 
+  /** 工作区根的系统属性覆盖键（第 27 节，整机测试用）。 */
+  private static final String ROOT_PROPERTY = "oryxos.root";
+
   private final Path root;
 
   /**
@@ -37,12 +44,28 @@ public final class Workspace {
   }
 
   /**
+   * @param root 已经是工作区根本身（不再叠 {@code .oryxos}）
+   * @param alreadyRoot 恒传 {@code true}；这个形参只为与上面的 public 构造器区分签名
+   */
+  private Workspace(Path root, boolean alreadyRoot) {
+    this.root = alreadyRoot ? root : root.resolve(WORKSPACE_DIR);
+  }
+
+  /**
    * 以进程当前目录为基准解析工作区。
    *
-   * @return 当前目录下的 {@code .oryxos/}；<b>不检查它是否存在</b>——存在性由 {@link #requireExists()} 单独判定
+   * <p>系统属性 {@value #ROOT_PROPERTY} 存在且非空白时，它<b>就是工作区根</b>（{@code -Doryxos.root=/tmp/x/.oryxos}），
+   * 不再叠一层 {@code .oryxos}——整机测试要的是「工作区落在临时目录」，多叠一层会让测试的准备路径和真实路径差一级。
+   *
+   * @return 当前目录下的 {@code .oryxos/}，或被 {@value #ROOT_PROPERTY} 覆盖后的根；<b>不检查它是否存在</b>——存在性由 {@link
+   *     #requireExists()} 单独判定
    */
   public static Workspace current() {
-    return new Workspace(Paths.get(""));
+    String override = System.getProperty(ROOT_PROPERTY);
+    if (override == null || override.isBlank()) {
+      return new Workspace(Paths.get(""));
+    }
+    return new Workspace(Paths.get(override).toAbsolutePath().normalize(), true);
   }
 
   /**

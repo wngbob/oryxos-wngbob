@@ -40,6 +40,9 @@ public class ProviderConfiguration {
     for (ProviderProperties.ProviderEntry entry : properties.providers()) {
       if ("deepseek".equals(entry.name())) {
         providers.put(entry.name(), deepSeek(entry));
+      } else if (MockChatModel.PROVIDER_NAME.equals(entry.name())) {
+        // 第 27 节：内置 mock 与真厂商走同一条受理路径——装配处只按名字选实现，Agent 侧看到的仍是普通厂商
+        providers.put(entry.name(), new MockChatModel());
       }
     }
     return Map.copyOf(providers);

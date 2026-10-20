@@ -443,6 +443,8 @@ Web Service 是 OryxOS 的对外完整门面，业务系统通过 REST API 接�
 1. `GET /api/v1/health`
 2. `GET /api/v1/info`
 
+> **2026-10-20 修订注（第 27 节交付）**：核心阶段实际是 **11 个**端点——第 27 节为「三面同源」对账补了会话摘要列表 `GET /api/v1/sessions`（最近 100 条摘要、`?status=` 可选；管理台「会话」页的数据源）。上表的 10 个端点签名一字未动，本节标题里的「10 个」保留为课程口径。权威逐字契约见 `specs/009-web-service/contracts/rest-endpoints.md` 与 `specs/010-human-trigger-flow/acceptance-report.md`。
+
 ### 7.3 扩展阶段补齐的端点
 
 **`Agent` 目录的上传/查看/更新/删除**（业务方通过 API 而不是手动把目录丢进 `.oryxos/agents/` 来创建新 Agent，含一句话生成 `AGENT.md`，这才是"纯 API 定义一个新 Agent"的完整闭环）；Memory 的 append/clear/search；Tool describe 和调用历史；LLM call 历史和 token 统计；**`AgentScheduler` 的调度管理**（增删查改某个 Agent frontmatter 的 `schedules`，不用改文件重启进程）；Webhook 触发；SSE 流式响应；Prometheus metrics；OpenAPI spec。
@@ -846,6 +848,8 @@ mvn clean package
 
 **可演示：** 外部系统通过 10 个 REST 端点完整调用 OryxOS。
 
+> **2026-10-20 修订注（第 27 节交付）**：最终交付为 **11 个**端点——第 27 节为「三面同源」对账补了 `GET /api/v1/sessions`（最近 100 条会话摘要，`?status=` 可选）。上面「10 个」是第三周的原计划口径，原文不重写，以 §7.2 的修订注为准。
+
 ### 第四周（3 小时）：多 Agent 演示 + 工程化收尾
 
 - 多 Agent 演示（两个不同 Profile 的 Agent 在同一实例并存）
@@ -886,7 +890,7 @@ OryxOS 技术方案核心：**JDK 21 + Spring Boot 3.x** 单体应用，自实�
 2. **能力二** ReAct 循环（Agent 的大脑，引擎约数十行 Java）
 3. **能力三** Memory 三层记忆（统一门面，核心阶段 `MEMORY.md` 加两个内置 Tool，向量检索放扩展，接口预留升级空间）
 4. **能力四** Tool 体系（内置 9 个 Tool 加 Plugin Tool 三档接入，主推 `AGENT.md` 目录 加 MCP 零代码，`NotifyTools` 对称补上出站通知能力，核心阶段 Tool 相关三合一为一个模块）
-5. **能力五** Web Service（REST API 六类操作核心 10 个端点，业务系统集成的唯一通道）
+5. **能力五** Web Service（REST API 六类操作核心 10 个端点，业务系统集成的唯一通道；**2026-10-20 修订注（第 27 节交付）**：现为 **11** 个——补了会话摘要列表 `GET /api/v1/sessions`，见 §7.2 修订注，原数字保留）
 
 五大能力加支撑模块是**底座**（第一部分），本身不是某个具体的业务 Agent。真正定义一个业务 Agent 靠的是 Skill（做什么）加 Profile（怎么跑），核心阶段手动改文件，扩展阶段统一到 `POST /api/v1/agents` 一个入口（第二部分，第 11 章）——这条边界线是这版技术方案跟早期版本最大的结构性调整。
 

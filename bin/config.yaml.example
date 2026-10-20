@@ -20,3 +20,16 @@ deepseek:
   # 写的是 ${DEEPSEEK_API_KEY} 占位，明文凭证不落仓库里的任何配置文件。
   # 这里留空时，start.sh 会退回到当前 shell 已设置的 DEEPSEEK_API_KEY。
   api-key: ""
+
+# ── 没有凭证也想跑一遍？用内置的 mock Provider ────────────────────────────────
+# application.yaml 里随包声明了一个 mock 厂商（唯一不要求 api-key 的厂商）。
+# 它不是真实模型，只按固定脚本走一轮：先请求一次 save_memory，再给最终答复——
+# 用来把「对话 → 工具 → 记忆 → 会话 → 审计」整条链路在无 key 环境验一遍。
+#
+# 用法：Agent 的 AGENT.md 里写  provider: { name: mock, model: mock-model }
+#       tools 里带上 save_memory，然后直接跑命令行：
+#         java -jar oryxos-boot/target/oryxos.jar chat --profile <agent>
+#       （bin/start.sh 恒要求真实 key，mock 自测不走它。）
+#
+# 本文件刻意没有 providers 段：它是「两级键 + 标量值」子集，表达不了列表；
+# 厂商清单的唯一真相源是 oryxos-boot/src/main/resources/application.yaml。

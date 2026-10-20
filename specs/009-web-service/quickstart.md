@@ -169,6 +169,8 @@ curl -s localhost:8080/api/v1/sessions/cli:local:<agent名> | python3 -m json.to
 
 **预期**：10 个端点全部列出，分组清晰，可直接在页面上试调。
 
+> **2026-10-20 修订注（第 27 节交付）**：第 27 节补了 `GET /api/v1/sessions`，现为 **11** 个（会话组 **5** 个）。重跑时按 11 判，原文保留。
+
 ## 10. 自动化门禁
 
 ```bash

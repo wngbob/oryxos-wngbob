@@ -53,6 +53,10 @@ oryxos:
   providers:
     - name: deepseek
       api-key: ${DEEPSEEK_API_KEY}
+    # 第 27 节内置 mock：不连真实模型、不需要 key，按固定脚本驱动一次 save_memory 的 ReAct，
+    # 用来在无凭证环境把「对话 → 工具 → 记忆 → 会话 → 审计」整条链路验一遍。
+    # 唯一一项不要求 api-key 的厂商（ProviderProperties.validate 对它豁免），AGENT.md 里 provider.name: mock 即选中它。
+    - name: mock
   # 搜索接缝的档位选择:配了 key 就用带 key 的 Tavily,留空则退回免 key 的 DuckDuckGo(装上就能跑)。
   # 与上面的 providers[].api-key 不同,这个占位**带空默认值**——搜索 key 是可选的,缺失不该让启动失败。
   # 同理 MUST 为 ${ENV_VAR} 占位、禁止明文(章程 VIII/FR-010)。

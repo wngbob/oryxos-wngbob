@@ -74,7 +74,7 @@ const zh = {
       { name: 'ReAct 循环', desc: '自实现推理引擎：思考 → 调工具 → 看结果 → 再决定，行为完全可控' },
       { name: 'Memory 记忆', desc: '会话 + 长期两层记忆，跨对话记住用户偏好、项目背景、关键决策' },
       { name: 'Tool 工具体系', desc: '内置 15 个工具，零代码到重代码三档扩展，白名单沙箱强制隔离' },
-      { name: 'Web Service', desc: '10 个 REST 端点统一暴露全部能力；同一端口提供只读管理台与 OpenAPI 文档' }
+      { name: 'Web Service', desc: '11 个 REST 端点统一暴露全部能力；同一端口提供只读管理台与 OpenAPI 文档' }
     ]
   },
   arch: {
@@ -201,7 +201,7 @@ const en = {
       { name: 'ReAct Loop', desc: 'Self-implemented reasoning engine: think → act → observe → decide. Fully controllable' },
       { name: 'Memory', desc: 'Session + long-term memory that keeps user preferences and project context across conversations' },
       { name: 'Tool System', desc: '15 built-in tools, three extension tiers from zero-code to full-code, whitelist sandbox' },
-      { name: 'Web Service', desc: '10 REST endpoints expose every capability; a read-only admin console and OpenAPI docs on the same port' }
+      { name: 'Web Service', desc: '11 REST endpoints expose every capability; a read-only admin console and OpenAPI docs on the same port' }
     ]
   },
   arch: {

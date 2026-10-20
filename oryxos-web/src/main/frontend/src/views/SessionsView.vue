@@ -1,36 +1,48 @@
 <script setup>
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { get } from '../api.js'
 
 /**
  * 会话页（契约 admin-console.md §3-第 1 页）。
  *
- * 是「按会话 ID 查询」而不是「会话列表」：本节的 10 端点契约里没有 `GET /api/v1/sessions`，
- * 照课件的「会话列表」写就会造出一个契约外端点（软门禁 ①）。会话 ID 由创建会话的响应给出，
- * 在这里粘贴即可。
+ * 第 27 节起数据源是 `GET /api/v1/sessions`（最近活跃的 100 条摘要），点一行再读
+ * `GET /api/v1/sessions/{id}` 拿历史正文——列表不带 `messages`，一页几十个会话的正文没必要一次拉回来。
+ *
+ * 仍然只读：本页只发 GET，不提供创建与归档入口（归档是写操作，属契约外）。
  */
-const sessionId = ref('')
-const loading = ref(false)
+const loading = ref(true)
 const error = ref('')
+const sessions = ref([])
+const statusFilter = ref('')
+
+const detailLoading = ref(false)
+const detailError = ref('')
 const session = ref(null)
 
-async function query() {
-  const id = sessionId.value.trim()
-  if (!id) {
-    error.value = '请输入会话 ID'
-    session.value = null
-    return
-  }
+async function load() {
   loading.value = true
   error.value = ''
+  try {
+    sessions.value = await get('/api/v1/sessions', statusFilter.value ? { status: statusFilter.value } : undefined)
+  } catch (cause) {
+    // 「读不到」与「没有数据」是两件事，页面只负责如实显示（契约 §6）
+    error.value = cause.message
+    sessions.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+async function open(id) {
+  detailLoading.value = true
+  detailError.value = ''
   session.value = null
   try {
     session.value = await get('/api/v1/sessions/' + encodeURIComponent(id))
   } catch (cause) {
-    // 「查不到」与「端点坏了」都由信封的 message 说明，页面只负责如实显示（契约 §6）
-    error.value = cause.message
+    detailError.value = cause.message
   } finally {
-    loading.value = false
+    detailLoading.value = false
   }
 }
 
@@ -41,32 +53,72 @@ function formatTime(value) {
 function statusClass(status) {
   return status === 'active' ? 'tag-ok' : 'tag-warn'
 }
+
+onMounted(load)
 </script>
 
 <template>
   <section>
-    <form class="card query" @submit.prevent="query">
-      <label class="query-label" for="session-id">会话 ID</label>
-      <input
-        id="session-id"
-        v-model="sessionId"
-        class="field query-input mono"
-        type="text"
-        placeholder="例如 web:default:daily-weather:20261019"
-        autocomplete="off"
-      />
-      <button class="btn btn-primary" type="submit">查询</button>
+    <form class="card toolbar" @submit.prevent="load">
+      <label class="toolbar-label" for="session-status">状态</label>
+      <select id="session-status" v-model="statusFilter" class="field toolbar-select" @change="load">
+        <option value="">全部</option>
+        <option value="active">active</option>
+        <option value="archived">archived</option>
+      </select>
+      <button class="btn" type="submit">刷新</button>
     </form>
 
-    <div v-if="loading" class="card state">正在查询…</div>
+    <div v-if="loading" class="card state">正在读取会话列表…</div>
 
-    <div v-else-if="error" class="card state state-error">查询失败：{{ error }}</div>
+    <div v-else-if="error" class="card state state-error">读取失败：{{ error }}</div>
 
-    <div v-else-if="!session" class="card state">
-      输入会话 ID 后查询。会话 ID 由业务系统调用创建会话端点时拿到的响应给出，管理台不提供会话的制造入口。
+    <div v-else-if="sessions.length === 0" class="card state">
+      还没有会话。会话由业务系统调用创建端点生成，管理台只读。
     </div>
 
-    <template v-else>
+    <div v-else class="card table-wrap">
+      <h2 class="card-title">会话（最近活跃的 {{ sessions.length }} 条）</h2>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>会话 ID</th>
+            <th>Agent</th>
+            <th>状态</th>
+            <th>渠道 / 用户</th>
+            <th>消息数</th>
+            <th>最后活跃</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="row in sessions"
+            :key="row.sessionId"
+            class="row-clickable"
+            :class="{ 'row-selected': session && session.sessionId === row.sessionId }"
+            @click="open(row.sessionId)"
+          >
+            <td class="mono">{{ row.sessionId }}</td>
+            <td>{{ row.profile || '—' }}</td>
+            <td>
+              <span :class="['tag', statusClass(row.status)]">{{ row.status }}</span>
+            </td>
+            <td>
+              <span class="mono">{{ row.channel }}</span> /
+              <span class="mono">{{ row.userId }}</span>
+            </td>
+            <td class="mono">{{ row.messageCount }}</td>
+            <td class="mono">{{ formatTime(row.lastActiveAt) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div v-if="detailLoading" class="card state">正在读取会话详情…</div>
+
+    <div v-else-if="detailError" class="card state state-error">读取失败：{{ detailError }}</div>
+
+    <template v-else-if="session">
       <div class="card">
         <h2 class="card-title">会话概览</h2>
         <table class="table">
@@ -135,22 +187,29 @@ function statusClass(status) {
 </template>
 
 <style scoped>
-.query {
+.toolbar {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
 }
 
-.query-label {
+.toolbar-label {
   font-size: 13px;
   font-weight: 600;
   color: var(--ox-text-2);
 }
 
-.query-input {
-  flex: 1;
-  min-width: 240px;
+.toolbar-select {
+  min-width: 140px;
+}
+
+.row-clickable {
+  cursor: pointer;
+}
+
+.row-selected {
+  background: var(--ox-glow);
 }
 
 .message-content {

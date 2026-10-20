@@ -252,7 +252,7 @@ python3 -c "import sqlite3;c=sqlite3.connect('.oryxos/oryxos.db');print(c.execut
 - **不是新增外观概念，是把已定外观换成另一个已定来源**：官网 `custom.css` 是本仓既有的首屏真相源（第 26 节 research D8 早已指定它为准），本次只是把「取官网的哪一档」从 `.dark` 改成「`index.html` 那种跟随系统的取法」。修订注以带日期形式挂在 `spec.md` FR-014、`contracts/admin-console.md` §5、`.claude/skills/oryxos-admin-ui/SKILL.md` 三处，**未重写原文**（本仓惯例）。
 - **令牌仍是单向引用、不建第二真相源**：管理台只逐字复制，不反向影响官网；`AdminThemeSourceTest` 读的是 `../website/.vitepress/theme/custom.css`，把它钉成「改一边另一边必须跟」。
 - **渲染面零改动**：没有改任何视图的数据来源、没有加路由、没有加端点；`AdminConsoleSourceTest`（只 GET / 全路径 `/api/v1` 下 / 五视图各引用自己的端点 / 无写操作字样）在改动后照常全绿。
-- **人工验收与本次改动的先后关系**：§六 的 Step 7 是 **2026-10-20 在旧深色外观下**走的；本次改版后**尚未**做一次人工目视复核，「默认浅色 / 系统深色偏好下切深色档 / 五页视觉正常」这三条目前只到源码断言与前端构建层（产物里实测含 `prefers-color-scheme`、`eyebrow`，且不含 `class="dark"`），**视觉复核并入下面 §四 新增的第 6 项**。
+- **人工验收与本次改动的先后关系**：§六 的 Step 7 是 **2026-10-20 在旧深色外观下**走的；本次改版后的视觉复核**已于同日由用户另行完成并确认通过**（默认浅色 / 系统深色偏好下切深色档 / 页面视觉正常），此前只到源码断言与前端构建层（产物里实测含 `prefers-color-scheme`、`eyebrow`，且不含 `class="dark"`）。见 §四 第 6 项。
 
 ### 交付后产品变更：管理台加 logo + 概览页（2026-10-20，用户请求）
 
@@ -269,7 +269,7 @@ python3 -c "import sqlite3;c=sqlite3.connect('.oryxos/oryxos.db');print(c.execut
 - **logo 与令牌同一口径（逐字复制 + 机器比对）**：管理台与官网是两份独立产物，静态资源不可能运行时共享；`AdminThemeSourceTest` 直接读 `../website/public/images/logo-icon.svg` 比对，**改官网 logo 不跟会红**。
 - **判据随需求同向修改，不是放宽**：初版判据是「概览页**不引入** `api.js`」（静态快照），澄清后反转为「**必须引入** `api.js` 且引用四个端点」——断言数量与强度均未减少，只是方向跟着用户裁决走；`AdminConsoleSourceTest` 仍是 7 条。
 - **构建期抓红一处（如实记录）**：`mvn clean verify` 的 Spotless 判了 `AdminConsoleSourceTest` 的 javadoc 换行不合 google-java-format（手动折行的两行该合成一行）。按门禁口径 `./mvnw -pl oryxos-web spotless:apply` 修正后重跑全绿——**没有放宽规则，也没有删断言**。前端侧无告警（Vite 构建通过，产物里能 grep 到「定时任务」与 `/api/v1/profiles`）。
-- **人工目视复核仍未做**：概览页计数卡与两栏版式、logo 在侧栏里的实际大小与留白，目前只到源码断言、前端构建与哈希产物层，**视觉复核并入下面 §四 第 6 项**（与外观改版合并成一次看）。
+- **人工目视复核已于 2026-10-20 由用户完成并确认通过**：概览页计数卡与两栏版式、logo 在侧栏里的实际大小与留白均正常；此前只到源码断言、前端构建与哈希产物层。见 §四 第 6 项。
 
 ---
 
@@ -283,6 +283,8 @@ harness 已判卷的部分不再重复；以下是**单测/源码断言判不了
 4. **`/swagger-ui` 交互式文档齐全**（Step 8）：浏览器打开 `/swagger-ui`，应看到恰好 10 个 operation、六组分组正确（curl 层已实测 `/v3/api-docs` 恰好 10 个）。
 5. **断掉 Provider 拿 503**（Step 5.6）：把 key 设为**无效值**（不能删——`${DEEPSEEK_API_KEY}` 无默认值，缺失会让启动失败）后发一条消息，应得 `503 {"code":503,"message":"provider unavailable: <name>"}`。**作者侧已于 2026-10-19 真链路实测**：`{"code":503,"message":"provider unavailable: deepseek","data":null,...}`，同一请求 `llm_calls` 落 `success=0` 行（401 原文只进审计/日志、不进响应体），且此时 `/health` 仍报 `deepseek:"UP"`（配置就绪 ≠ 可达）。
 6. **管理台新版外观 + 概览页 + 定时任务页 + logo 的目视复核**（2026-10-20 三次改动后合并为一次，见 §三 ⑪/⑫/⑬）：打开 `/admin/`，在**系统浅色偏好**下应看到浅色底 + 琥珀色点缀（与官网首页同款）；把系统切到深色偏好后刷新，应自动切到深色档、**页面结构不变**；**侧栏左上角是官网同一枚 oryx 徽标**（不是色块或文字 logo），浏览器标签页图标也是它；概览页应显示四张计数卡（Agent 可用/共、活跃会话、已注册工具、运行时长）与健康卡，数字与四个端点 curl 结果一致，四栏在窄屏下依次折成两栏 / 单栏；**定时任务页**应列出各 Agent 声明的 cron 任务（任务 id `Agent#序号`、cron、时区、消息），条数与 `/api/v1/profiles` 一致，无声明时是空态而非白屏；七个页面的页头、卡片、表格、标签、输入框与按钮形态应与官网首页一致。源码层一致性（令牌逐字、logo 逐字节、概览页落地且读数据、各页端点引用）由 `AdminThemeSourceTest` / `AdminConsoleSourceTest` 判，**视觉层只能人看**；§六 Step 7 是在**这三次改动之前**执行的，不覆盖这一项。
+
+> **2026-10-20 修订注（第 27 节）**：① 本清单第 1 / 4 项的数量口径已变——第 27 节新增 `GET /api/v1/sessions`，端点总数为 **11**、Swagger operation 数为 **11**，管理台第 1 页由「按会话 ID 查询」改为「列表 + 点一行看详情」。② 第 6 项起初只被**部分覆盖**（Step 7 不含深色偏好切换与 logo 目视）；**2026-10-20 用户已另行确认这两条通过，第 6 项全部收口**。留痕与抓到的问题见 `specs/010-human-trigger-flow/manual-test-guide.md`。
 
 **已知边界（不是「没验」，是产品层面就不可达或有意不做）**：
 
@@ -337,8 +339,8 @@ harness 已判卷的部分不再重复；以下是**单测/源码断言判不了
 | 「并发压一把」（spec 人工项） | **未做**——向导无对应步骤，如实记为未覆盖（§四 已知边界） |
 | 504 真链路 | **结构上不可达**（裁决 ②，`AgentTimeoutException` 无抛出点），判卷在 `GlobalExceptionHandlerTest` |
 | 管理台视觉层（五页渲染 / 无写入口 / 刷新子路由） | 用户执行 Step 7，整体通过；源码层另有 `AdminConsoleSourceTest` 判卷 |
-| 管理台**改版后**的外观（默认浅色 / 跟随系统深色 / 与官网同款） | **未做人工目视复核**——Step 7 是改版前执行的；目前只到源码断言（`AdminThemeSourceTest`）与前端构建产物核对。已列入 §四 第 6 项 |
-| 概览页 / 定时任务页与 logo（2026-10-20 新增的第六、七页） | **未做人工目视复核**——Step 7 早于这两页存在；目前只到源码断言（`AdminConsoleSourceTest.overviewPageIsLandingPage` + `VIEW_ENDPOINTS` 的端点引用 / `AdminThemeSourceTest.adminLogoMirrorsSiteIcon`）与前端构建产物核对（favicon 指向带哈希的 `logo-icon-*.svg`）。两页用到的端点本身已在 Step 2/3 被用户 curl 过，未覆盖的是**页面渲染层**。已并入 §四 第 6 项 |
+| 管理台**改版后**的外观（默认浅色 / 跟随系统深色 / 与官网同款） | **2026-10-20 用户已目视确认通过**（深色偏好切换正常、与官网同款）；另有源码断言（`AdminThemeSourceTest`）与前端构建产物核对 |
+| 概览页 / 定时任务页与 logo（2026-10-20 新增的第六、七页） | 概览页与定时任务页已随第 27 节 Step 7.1~7.9 逐页走过；**logo 目视于 2026-10-20 另行确认通过**（侧栏与标签页图标均为官网同一枚徽标）。源码层另有 `AdminConsoleSourceTest.overviewPageIsLandingPage` + `VIEW_ENDPOINTS` / `AdminThemeSourceTest.adminLogoMirrorsSiteIcon` |
 | `mem0` 记忆档 | 沿用第 22 节永久已知边界，本节 `/memory` 只读视图在该档同样未与真实服务对过 |
 
 **与第 22 节的区别**：第 22 节有一档（`mem0`）经裁决**有意不验收**、成为**永久已知边界**；本节没有这类「该验没验」的档——两处未覆盖（并发压测、504 真链路）都已作为**已知边界**显式登记在 §四，不是遗漏。

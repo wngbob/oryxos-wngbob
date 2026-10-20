@@ -5,7 +5,9 @@ import io.oryxlabs.oryxos.storage.repository.SessionRepository;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Sort;
 
 /**
  * {@link SessionService} 的 JPA 实现（contracts/session-persistence.md §1）。
@@ -87,6 +89,19 @@ public class JpaSessionService implements SessionService {
   @Override
   public long countActive() {
     return repository.countByStatus(Session.STATUS_ACTIVE);
+  }
+
+  @Override
+  public List<Session> listRecent(int limit) {
+    if (limit <= 0) {
+      return List.of();
+    }
+    // 排序交给数据库：last_active_at 有索引可走，应用层再排序等于把全表拉回来重排一遍。
+    // 截断在应用层做：Spring Data 的 findAll(Sort) 没有 limit 参数，而单机核心阶段的会话量用不着分页对象。
+    return repository.findAll(Sort.by(Sort.Direction.DESC, "lastActiveAt")).stream()
+        .limit(limit)
+        .map(JpaSessionService::toSession)
+        .toList();
   }
 
   private static SessionEntity newRow(Session session, String messagesJson) {

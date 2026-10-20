@@ -6,12 +6,15 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.oryxlabs.oryxos.core.tool.ToolResult;
 import io.oryxlabs.oryxos.storage.entity.SessionEntity;
 import io.oryxlabs.oryxos.storage.repository.SessionRepository;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.data.domain.Sort;
 
 /**
  * {@link SessionService} 的验收测试（课件第 18 节「四、验收 harness」）。
@@ -36,11 +40,13 @@ class SessionServiceTest {
   /** 替身背后的一行行数据，键是 {@code session_id}。 */
   private final Map<String, SessionEntity> rows = new LinkedHashMap<>();
 
+  private SessionRepository repository;
+
   private SessionService sessionService;
 
   @BeforeEach
   void setUp() {
-    SessionRepository repository = mock(SessionRepository.class);
+    repository = mock(SessionRepository.class);
     when(repository.findById(anyString()))
         .thenAnswer(call -> Optional.ofNullable(rows.get(call.getArgument(0, String.class))));
     when(repository.save(any(SessionEntity.class)))
@@ -56,6 +62,22 @@ class SessionServiceTest {
             call -> {
               String status = call.getArgument(0, String.class);
               return rows.values().stream().filter(row -> status.equals(row.getStatus())).count();
+            });
+    // 第 27 节的列表查询：替身照调用方传进来的 Sort 真排序——服务层要是把倒序写成正序，
+    // 这里会照着错的方向排、断言当场红，替身不替它「纠正」
+    when(repository.findAll(any(Sort.class)))
+        .thenAnswer(
+            call -> {
+              Sort sort = call.getArgument(0, Sort.class);
+              Sort.Order order = sort.getOrderFor("lastActiveAt");
+              Comparator<SessionEntity> byLastActive =
+                  Comparator.comparing(SessionEntity::getLastActiveAt);
+              return rows.values().stream()
+                  .sorted(
+                      order != null && order.isDescending()
+                          ? byLastActive.reversed()
+                          : byLastActive)
+                  .toList();
             });
     sessionService = new JpaSessionService(repository);
   }
@@ -257,5 +279,42 @@ class SessionServiceTest {
 
     assertThat(sessionService.countActive()).isEqualTo(1);
     assertThat(rows.get(kept.id()).getStatus()).isEqualTo("active");
+  }
+
+  @Test
+  @DisplayName("listRecent：按最后活跃时间倒序，limit 截断掉的是更早的那几条")
+  void listRecent_ordersByLastActiveDescendingAndHonoursLimit() {
+    seed("web:alice:old", LocalDateTime.of(2026, 10, 20, 8, 0));
+    seed("web:alice:newest", LocalDateTime.of(2026, 10, 20, 12, 0));
+    seed("web:alice:middle", LocalDateTime.of(2026, 10, 20, 10, 0));
+
+    assertThat(sessionService.listRecent(2))
+        .extracting(Session::id)
+        .containsExactly("web:alice:newest", "web:alice:middle");
+    assertThat(sessionService.listRecent(10)).hasSize(3);
+  }
+
+  @Test
+  @DisplayName("listRecent：limit <= 0 返回空表且一次库都不查（「要零条」是合法意图，不是异常）")
+  void listRecent_nonPositiveLimitReturnsEmpty() {
+    seed("web:alice:x", LocalDateTime.of(2026, 10, 20, 8, 0));
+
+    assertThat(sessionService.listRecent(0)).isEmpty();
+    assertThat(sessionService.listRecent(-1)).isEmpty();
+    verify(repository, never()).findAll(any(Sort.class));
+  }
+
+  /** 直接放一行进替身，绕开 save 的序列化——本类只需要「表里有这么几行」。 */
+  private void seed(String sessionId, LocalDateTime lastActiveAt) {
+    SessionEntity entity = new SessionEntity();
+    entity.setSessionId(sessionId);
+    entity.setChannel("web");
+    entity.setUserId("alice");
+    entity.setProfileName("daily-weather");
+    entity.setMessagesJson("[]");
+    entity.setStatus(Session.STATUS_ACTIVE);
+    entity.setCreatedAt(lastActiveAt.minusHours(1));
+    entity.setLastActiveAt(lastActiveAt);
+    rows.put(sessionId, entity);
   }
 }
