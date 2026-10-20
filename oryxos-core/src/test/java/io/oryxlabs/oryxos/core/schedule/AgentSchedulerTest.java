@@ -27,8 +27,11 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
@@ -59,12 +62,14 @@ class AgentSchedulerTest {
   private AgentService agentService;
   private SessionService sessionService;
   private Session session;
+  private InMemoryTaskStore taskStore;
 
   @BeforeEach
   void setUp() {
     capturing = new CapturingTaskScheduler();
     agentService = mock(AgentService.class);
     sessionService = mock(SessionService.class);
+    taskStore = new InMemoryTaskStore();
     session = Session.create("scheduler:scheduler:weather", "scheduler", "scheduler", "weather");
     when(sessionService.getOrCreate(anyString(), anyString(), anyString())).thenReturn(session);
   }
@@ -72,7 +77,12 @@ class AgentSchedulerTest {
   /** 每个用例自带 Profile 集合：注册行为随输入而变，放 {@code @BeforeEach} 里只会让「输入是什么」看不清。 */
   private AgentScheduler newScheduler(Profile... profiles) {
     return new AgentScheduler(
-        capturing, new ProfileRegistry(List.of(profiles)), agentService, sessionService);
+        capturing,
+        new ProfileRegistry(List.of(profiles)),
+        agentService,
+        sessionService,
+        taskStore,
+        FIXED_CLOCK);
   }
 
   /** {@code Profile} 是 10 参 record，本测试只关心名字与 schedules，其余传 null 走紧凑构造器归一化。 */
@@ -475,6 +485,165 @@ class AgentSchedulerTest {
     assertThat(source).doesNotContain("ToolInvocation");
   }
 
+  @Test
+  void registerAll_persistsTaskWithComputedNextRunAt() {
+    // cron "0 9 * * *" + UTC + 固定时钟 00:00Z → 下次触发恰是当天 09:00Z
+    Profile weather =
+        profile("weather", List.of(new Profile.ScheduleSpec("0 9 * * *", "UTC", "早报")));
+
+    newScheduler(weather).registerAll();
+
+    ScheduledTaskView task = taskStore.find("weather#1").orElseThrow();
+    assertThat(task.profileName()).isEqualTo("weather");
+    assertThat(task.cron()).isEqualTo("0 9 * * *");
+    assertThat(task.zone()).isEqualTo("UTC");
+    assertThat(task.message()).isEqualTo("早报");
+    assertThat(task.enabled()).isTrue();
+    assertThat(task.nextRunAt()).isEqualTo(Instant.parse("2026-10-18T09:00:00Z"));
+    assertThat(task.runCount()).isZero();
+    assertThat(task.lastRunAt()).isNull();
+    assertThat(task.lastStatus()).isNull();
+  }
+
+  @Test
+  void registerAll_afterRestart_keepsDisabledStateAndRunHistory() {
+    // 管理员停用后重启：重新登记只更新定义面，用户的决定与运行历史 MUST NOT 被冲掉
+    taskStore.put(
+        new ScheduledTaskView(
+            "weather#1",
+            "weather",
+            "0 30 9 * * *",
+            "UTC",
+            "旧消息",
+            false,
+            null,
+            Instant.parse("2026-10-17T09:30:00Z"),
+            ScheduledTaskView.STATUS_SUCCESS,
+            7));
+    Profile weather =
+        profile("weather", List.of(new Profile.ScheduleSpec("0 9 * * *", "UTC", "新消息")));
+
+    newScheduler(weather).registerAll();
+
+    ScheduledTaskView task = taskStore.find("weather#1").orElseThrow();
+    assertThat(task.enabled()).isFalse();
+    assertThat(task.runCount()).isEqualTo(7);
+    assertThat(task.lastStatus()).isEqualTo(ScheduledTaskView.STATUS_SUCCESS);
+    assertThat(task.lastRunAt()).isEqualTo(Instant.parse("2026-10-17T09:30:00Z"));
+    assertThat(task.message()).isEqualTo("新消息");
+    assertThat(task.nextRunAt()).isEqualTo(Instant.parse("2026-10-18T09:00:00Z"));
+  }
+
+  @Test
+  void scheduledTrigger_skipsDisabledTask_withoutExecutingOrRecording()
+      throws InterruptedException {
+    taskStore.put(
+        new ScheduledTaskView(
+            "weather#1", "weather", "0 9 * * *", null, "早报", false, null, null, null, 0));
+    Profile weather =
+        profile("weather", List.of(new Profile.ScheduleSpec("0 9 * * *", null, "早报")));
+    newScheduler(weather).registerAll();
+
+    runOnOtherThread(capturing.tasks().get(0));
+
+    verify(agentService, never()).process(any(), any());
+    assertThat(taskStore.executions("weather#1")).isEmpty();
+    // 停用不是「执行失败」：状态与计数都不动
+    assertThat(taskStore.find("weather#1").orElseThrow().runCount()).isZero();
+    assertThat(taskStore.find("weather#1").orElseThrow().lastStatus()).isNull();
+  }
+
+  @Test
+  void scheduledTrigger_runsEnabledTask_andRecordsExecution() throws InterruptedException {
+    Profile weather =
+        profile("weather", List.of(new Profile.ScheduleSpec("0 9 * * *", null, "早报")));
+    newScheduler(weather).registerAll();
+
+    runOnOtherThread(capturing.tasks().get(0));
+
+    verify(agentService).process(session, "早报");
+    assertThat(taskStore.executions("weather#1")).hasSize(1);
+    assertThat(taskStore.find("weather#1").orElseThrow().runCount()).isEqualTo(1);
+  }
+
+  @Test
+  void runOnce_success_recordsHistoryAndRollsTaskState() {
+    Profile weather =
+        profile("weather", List.of(new Profile.ScheduleSpec("0 9 * * *", null, "每日例行汇报")));
+    AgentScheduler scheduler = newScheduler(weather);
+    scheduler.registerAll();
+
+    scheduler.runOnce(weather, config("weather#1"));
+
+    ScheduledTaskView task = taskStore.find("weather#1").orElseThrow();
+    assertThat(task.lastStatus()).isEqualTo(ScheduledTaskView.STATUS_SUCCESS);
+    assertThat(task.runCount()).isEqualTo(1);
+    assertThat(task.lastRunAt()).isEqualTo(FIXED_CLOCK.instant());
+    assertThat(task.nextRunAt()).isAfter(FIXED_CLOCK.instant());
+
+    TaskExecutionView execution = taskStore.executions("weather#1").get(0);
+    assertThat(execution.success()).isTrue();
+    assertThat(execution.errorMessage()).isNull();
+    assertThat(execution.sessionId()).isEqualTo(session.id());
+    assertThat(execution.startedAt()).isEqualTo(FIXED_CLOCK.instant());
+  }
+
+  @Test
+  void runOnce_failure_recordsHistoryWithMessageAndFailedStatus() {
+    Profile weather =
+        profile("weather", List.of(new Profile.ScheduleSpec("0 9 * * *", null, "每日例行汇报")));
+    AgentScheduler scheduler = newScheduler(weather);
+    scheduler.registerAll();
+    when(agentService.process(any(), any())).thenThrow(new RuntimeException("boom"));
+
+    scheduler.runOnce(weather, config("weather#1"));
+
+    ScheduledTaskView task = taskStore.find("weather#1").orElseThrow();
+    assertThat(task.lastStatus()).isEqualTo(ScheduledTaskView.STATUS_FAILED);
+    assertThat(task.runCount()).isEqualTo(1);
+
+    TaskExecutionView execution = taskStore.executions("weather#1").get(0);
+    assertThat(execution.success()).isFalse();
+    assertThat(execution.errorMessage()).isEqualTo("boom");
+    assertThat(execution.sessionId()).isEqualTo(session.id());
+  }
+
+  @Test
+  void runNow_executesRegisteredTaskSynchronously() {
+    Profile weather =
+        profile("weather", List.of(new Profile.ScheduleSpec("0 9 * * *", null, "早报")));
+    AgentScheduler scheduler = newScheduler(weather);
+    scheduler.registerAll();
+
+    boolean ran = scheduler.runNow("weather#1");
+
+    assertThat(ran).isTrue();
+    verify(agentService).process(session, "早报");
+    // 同步执行：方法返回时本次已经计入
+    assertThat(taskStore.find("weather#1").orElseThrow().runCount()).isEqualTo(1);
+  }
+
+  @Test
+  void runNow_unknownTaskId_returnsFalseWithoutExecuting() {
+    AgentScheduler scheduler = newScheduler(profile("weather", List.of()));
+
+    assertThat(scheduler.runNow("weather#1")).isFalse();
+    verify(agentService, never()).process(any(), any());
+  }
+
+  @Test
+  void runNow_ignoresDisabledState() {
+    // 「立即执行」是运维的显式动作：停用的任务也能手动跑一次（与到点触发刻意不同）
+    Profile weather =
+        profile("weather", List.of(new Profile.ScheduleSpec("0 9 * * *", null, "早报")));
+    AgentScheduler scheduler = newScheduler(weather);
+    scheduler.registerAll();
+    taskStore.setEnabled("weather#1", false);
+
+    assertThat(scheduler.runNow("weather#1")).isTrue();
+    verify(agentService).process(session, "早报");
+  }
+
   private static String read(String relativePath) {
     Path file = repoRoot().resolve(relativePath);
     if (!Files.isRegularFile(file)) {
@@ -499,6 +668,111 @@ class AgentSchedulerTest {
           .findFirst()
           .orElseThrow(
               () -> new IllegalStateException("从 " + Path.of("").toAbsolutePath() + " 往上找不到仓库根"));
+    }
+  }
+
+  /**
+   * 手写替身：与 {@code JpaScheduledTaskStore} 同一套语义（只在内存里）。
+   *
+   * <p>刻意不用 Mockito：本测试要读回「登记后写进去的是什么」「执行后状态滚成什么」，桩比 mock 直观。
+   */
+  private static final class InMemoryTaskStore implements ScheduledTaskStore {
+
+    private final Map<String, ScheduledTaskView> tasks = new LinkedHashMap<>();
+    private final List<TaskExecutionView> executions = new ArrayList<>();
+
+    void put(ScheduledTaskView task) {
+      tasks.put(task.taskId(), task);
+    }
+
+    @Override
+    public void register(ScheduledTaskView task) {
+      ScheduledTaskView existing = tasks.get(task.taskId());
+      if (existing == null) {
+        tasks.put(task.taskId(), task);
+        return;
+      }
+      // 与 JPA 实现同款：只更新定义面与 next_run_at，enabled 与运行态是用户 / 历史的事实
+      tasks.put(
+          task.taskId(),
+          new ScheduledTaskView(
+              task.taskId(),
+              task.profileName(),
+              task.cron(),
+              task.zone(),
+              task.message(),
+              existing.enabled(),
+              task.nextRunAt(),
+              existing.lastRunAt(),
+              existing.lastStatus(),
+              existing.runCount()));
+    }
+
+    @Override
+    public void recordExecution(TaskExecutionView execution, Instant nextRunAt) {
+      executions.add(0, execution);
+      ScheduledTaskView existing = tasks.get(execution.taskId());
+      if (existing == null) {
+        return;
+      }
+      tasks.put(
+          execution.taskId(),
+          new ScheduledTaskView(
+              existing.taskId(),
+              existing.profileName(),
+              existing.cron(),
+              existing.zone(),
+              existing.message(),
+              existing.enabled(),
+              nextRunAt,
+              execution.startedAt(),
+              execution.success()
+                  ? ScheduledTaskView.STATUS_SUCCESS
+                  : ScheduledTaskView.STATUS_FAILED,
+              existing.runCount() + 1));
+    }
+
+    @Override
+    public boolean isEnabled(String taskId) {
+      ScheduledTaskView task = tasks.get(taskId);
+      return task == null || task.enabled();
+    }
+
+    @Override
+    public boolean setEnabled(String taskId, boolean enabled) {
+      ScheduledTaskView task = tasks.get(taskId);
+      if (task == null) {
+        return false;
+      }
+      tasks.put(
+          taskId,
+          new ScheduledTaskView(
+              task.taskId(),
+              task.profileName(),
+              task.cron(),
+              task.zone(),
+              task.message(),
+              enabled,
+              task.nextRunAt(),
+              task.lastRunAt(),
+              task.lastStatus(),
+              task.runCount()));
+      return true;
+    }
+
+    @Override
+    public Optional<ScheduledTaskView> find(String taskId) {
+      return Optional.ofNullable(tasks.get(taskId));
+    }
+
+    @Override
+    public List<ScheduledTaskView> list() {
+      return new ArrayList<>(tasks.values());
+    }
+
+    @Override
+    public List<TaskExecutionView> executions(String taskId) {
+      return executions.stream().filter(execution -> execution.taskId().equals(taskId)).toList();
     }
   }
 

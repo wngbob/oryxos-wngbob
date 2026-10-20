@@ -68,7 +68,7 @@ OryxOS 是企业私有部署的 **Agent 操作系统**：装在企业自己的 K
 - 💾 **跨对话记忆**：会话记忆 + 长期记忆两层（`MEMORY.md`），接口预留向量检索升级空间
 - 🌐 **无状态可扩展**：实例无状态、状态外置，从架构第一天为分布式留好路
 - ⏰ **三种触发源，一条链路**：CLI 与 REST API（人推）、cron 定时任务（钟推）汇入同一个 `AgentService`，引擎不感知消息来源
-- 📊 **开箱即用的只读管理台**：`/admin/` 下七页运行时视图（概览、会话、Agent、工具、定时任务、长期记忆、运行状态），与 REST 端点同端口、无写入口
+- 📊 **开箱即用的管理台**：`/admin/` 下七页运行时视图（概览、会话、Agent、工具、定时任务、长期记忆、运行状态），与 REST 端点同端口；除定时任务页的「立即执行 / 启用停用」外均为只读
 
 ## 五大核心能力
 
@@ -78,7 +78,7 @@ OryxOS 是企业私有部署的 **Agent 操作系统**：装在企业自己的 K
 | **ReAct 循环** | Agent 的推理引擎：LLM 思考 → 调工具 → 看结果 → 再决定，直到给出最终响应；自实现、行为完全可控 |
 | **Memory 记忆** | 会话 + 长期两层记忆，跨对话记住用户偏好、项目背景、关键决策 |
 | **Tool 工具体系** | 内置 **15 个**工具（文件读写编辑、Shell、HTTP、网页搜索与抓取、通知推送、交互提问、长期记忆），Plugin Tool 三档扩展，白名单沙箱强制隔离 |
-| **Web Service** | 11 个 REST 端点统一封装全部能力，任何能发 HTTP 的语言都能接入；同一端口提供只读管理台与 OpenAPI 文档 |
+| **Web Service** | 15 个 REST 端点统一封装全部能力，任何能发 HTTP 的语言都能接入；同一端口提供管理台（定时任务页可写）与 OpenAPI 文档 |
 
 ## 架构
 
@@ -100,7 +100,7 @@ OryxOS 是企业私有部署的 **Agent 操作系统**：装在企业自己的 K
 | `oryxos-memory` | 能力三「Memory」：`MemoryService` 三层门面、长期记忆三档后端（Markdown 默认 / SQLite / Mem0）、`MemoryTools` |
 | `oryxos-tool` | 能力四「Tool」：15 个内置工具（文件读写编辑、内容与路径检索、Shell、HTTP、网页搜索与抓取、通知、交互、长期记忆）、`ToolRegistry`、`AnnotatedToolAdapter`、`McpClientService`、`SearchProvider` 两档实现、`Sandbox` 接口 + `WhitelistSandbox` |
 | `oryxos-channel-cli` | CLI Channel：`CliChannel`、`oryxos chat` |
-| `oryxos-web` | 能力五「Web Service」：11 个 REST 端点、6 个 `ApiController`、统一响应信封、只读管理台（7 页）、OpenAPI |
+| `oryxos-web` | 能力五「Web Service」：15 个 REST 端点、7 个 `ApiController`、统一响应信封、管理台（7 页，仅定时任务页可写）、OpenAPI |
 | `oryxos-storage` | SQLite 持久化：Session、审计、记忆与通知渠道 Repository |
 | `oryxos-cli` | `OryxOsCli` 主入口、15 个子命令、`ConfigLoader` |
 | `oryxos-boot` | Spring Boot 启动模块、自动配置、依赖聚合；fat JAR `oryxos-boot/target/oryxos.jar`（主类 `OryxOsCli`） |
@@ -137,23 +137,26 @@ java -jar oryxos-boot/target/oryxos.jar profile create my-assistant
 export DEEPSEEK_API_KEY=sk-...
 java -jar oryxos-boot/target/oryxos.jar chat
 
-# 常驻模式：REST API + 只读管理台 + OpenAPI，同一个进程同一个端口
+# 常驻模式：REST API + 管理台（定时任务页可写）+ OpenAPI，同一个进程同一个端口
 java -jar oryxos-boot/target/oryxos.jar serve
 #   REST       http://localhost:8080/api/v1
 #   管理台     http://localhost:8080/admin/
 #   接口文档   http://localhost:8080/swagger-ui
 ```
 
-REST 端点共 **11 个**，全部落在 `/api/v1` 下，统一响应信封 `{code, message, data, timestamp}`：
+REST 端点共 **15 个**，全部落在 `/api/v1` 下，统一响应信封 `{code, message, data, timestamp}`：
 
 | 类别 | 端点 |
 |------|------|
 | 会话管理 | `POST /api/v1/sessions`（创建或取回）、`GET /api/v1/sessions`（最近 100 条摘要，可按 `status` 过滤）、`POST /api/v1/sessions/{id}/messages`（发消息）、`GET /api/v1/sessions/{id}`（查历史）、`DELETE /api/v1/sessions/{id}`（归档） |
 | Agent 调用 | `POST /api/v1/agents/{name}/invoke`（无状态调用） |
 | 信息查询 | `GET /api/v1/profiles`、`GET /api/v1/memory`、`GET /api/v1/tools` |
+| 定时任务 | `GET /api/v1/schedules`（列表与运行状态）、`GET /api/v1/schedules/{id}/executions`（执行历史）、`POST /api/v1/schedules/{id}/run`（立即执行）、`PUT /api/v1/schedules/{id}`（启用 / 停用） |
 | 系统状态 | `GET /api/v1/health`、`GET /api/v1/info` |
 
 其中 `GET /api/v1/sessions` 是管理台「会话」页的数据源：列表只返回摘要（不含对话正文），点开某一行才去读 `GET /api/v1/sessions/{id}` 拿最近 100 条历史。
+
+定时任务的定义源仍是 `AGENT.md` 的 `schedules`（cron / 时区 / 消息），`scheduled_tasks` / `task_executions` 两张表只存运行状态与执行历史（跨重启保留）；管理台「定时任务」页是第一个带写操作的页面——只开「立即执行」与「启用 / 停用」两个动作，且只能打 `/api/v1/schedules/**`。
 
 也可以用仓库里的后台启动脚本——它把凭证从 YAML 配置文件读出来（`bin/config.yaml` 不入库，模板是 `bin/config.yaml.example`）：
 
@@ -225,8 +228,9 @@ schedules: [{ cron: "0 0 8 * * *", message: "查一下今天天气并生成穿�
 - [x] 能力三：Memory（门面 + Markdown / SQLite / Mem0 三档长期记忆后端）
 - [x] Sandbox 白名单（文件路径 / Shell 命令 / HTTP 域名）
 - [x] 定时任务（第三触发源，与 CLI / Web 共用同一条链路）
-- [x] 能力五：Web Service（11 个 REST 端点）+ 只读管理台（7 页）
+- [x] 能力五：Web Service（15 个 REST 端点）+ 管理台（7 页，仅定时任务页可写）
 - [x] 跨节串联验收（第 27 节）
+- [x] 定时任务子系统（状态与历史落 SQLite、四个管理端点、跨重启恢复、多 Agent 隔离）
 - [ ] 三个验收 Demo：每日天气 / 每日科技日报 / 每日 GitHub 日报
 - [ ] OryxOS 1.0 发布 + 项目主页
 
@@ -234,7 +238,7 @@ schedules: [{ cron: "0 0 8 * * *", message: "查一下今天天气并生成穿�
 
 我们的开发理念是：**慢就是快，克制且聚焦**。先把单机的运行时内核做扎实，再逐步生长出分布式能力。
 
-- **阶段一（当前）单机运行时内核**：五大核心能力已跑通——配置即 Agent、多 Agent 并存、REST API 接入、对接 MCP、只读管理台；人推主干的全流程串联已用集成测试固定（第 27 节），剩余工作是把钟推与重启恢复串起来（第 28 节）并跑通三个验收 Demo（第 31 节）
+- **阶段一（当前）单机运行时内核**：五大核心能力已跑通——配置即 Agent、多 Agent 并存、REST API 接入、对接 MCP、管理台；人推主干（第 27 节）与钟推 / 重启恢复 / 多 Agent 隔离（第 28 节）的全流程串联均已用集成测试固定，剩余工作是跑通三个验收 Demo（第 31 节）
 - **阶段二（规划）底座分布式**：节点无状态化、状态外置、多副本部署，支撑更大规模与高可用
 - **阶段三（愿景）跨节点 Agent 协作**：引入 Agent 通信底座，对接 A2A，跨节点发现、委托、可靠异步协同
 - **横向能力**（伴随各阶段补齐）：多租户、SSO、完整审计、工具策略、可观测、**可写**的管理台（当前交付的第一版管理台是只读的，渠道管理等写入口留到扩展阶段）

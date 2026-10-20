@@ -3,8 +3,8 @@ import { ref } from 'vue'
 /**
  * 极简路由：不引 vue-router。
  *
- * 七个只读页面（概览 + 六个查询页）、零嵌套、零守卫、零懒加载——引一个路由库只为做「切换一个组件」，
- * 换来的依赖体积与升级面都不划算（契约 §1 把依赖钉死在 vue / vite / @vitejs/plugin-vue 三条）。
+ * 七个页面（概览 + 五个查询页 + 定时任务管理页）、零嵌套、零守卫、零懒加载——引一个路由库只为做
+ * 「切换一个组件」，换来的依赖体积与升级面都不划算（契约 §1 把依赖钉死在 vue / vite / @vitejs/plugin-vue 三条）。
  *
  * 走 History API 而不是 hash：URL 是 `/admin/tools` 这种干净形状，
  * 刷新能不能不 404 由服务端的 /admin/** 回落保证（WebConfig + 契约 §2）。
@@ -27,7 +27,7 @@ export const ROUTES = [
   {
     path: '/schedules',
     label: '定时任务',
-    hint: 'AGENT.md 声明的 cron 任务',
+    hint: 'cron 任务、运行状态与手动触发',
     code: 'SCHEDULES'
   },
   { path: '/memory', label: '长期记忆', hint: '核心区与归档区', code: 'MEMORY' },

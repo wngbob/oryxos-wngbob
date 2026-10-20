@@ -29,7 +29,7 @@
 | `oryxos-memory` | 会话记忆 + 长期记忆三档后端（Markdown / SQLite / Mem0） |
 | `oryxos-tool` | 15 个内置工具、Plugin Tool 三档扩展、ToolRegistry、MCP 客户端、Sandbox |
 | `oryxos-channel-cli` | CLI 交互渠道 |
-| `oryxos-web` | 11 个 REST 端点、只读管理台、OpenAPI |
+| `oryxos-web` | 15 个 REST 端点、管理台（仅定时任务页可写）、OpenAPI |
 | `oryxos-storage` | SQLite 持久化（Session、审计、记忆、通知渠道） |
 | `oryxos-cli` | Picocli 主入口（15 个子命令）与 `ConfigLoader` |
 | `oryxos-boot` | Spring Boot 装配与依赖聚合，产出 fat JAR（`oryxos.jar`，主类 `OryxOsCli`） |

@@ -63,4 +63,4 @@ In one sentence: frameworks give you materials to build your own house; orchestr
 | **ReAct Loop** | The Agent's reasoning engine: LLM thinks → calls tool → observes result → decides again, until a final response. Self-implemented, fully controllable |
 | **Memory** | Session + long-term memory, remembering user preferences, project context and key decisions across conversations |
 | **Tool System** | **15** built-in tools (file read/write/edit, shell, HTTP, web search and fetch, notifications, user interaction, long-term memory), Plugin Tool three-tier extension, whitelist sandbox |
-| **Web Service** | 11 REST endpoints wrap every capability — any language that speaks HTTP can integrate; a read-only admin console and OpenAPI docs are served on the same port |
+| **Web Service** | 15 REST endpoints wrap every capability — any language that speaks HTTP can integrate; an admin console (the schedules page can write) and OpenAPI docs are served on the same port |

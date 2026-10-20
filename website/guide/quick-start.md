@@ -23,7 +23,7 @@ java -jar oryxos-boot/target/oryxos.jar profile create my-assistant
 export DEEPSEEK_API_KEY=sk-...
 java -jar oryxos-boot/target/oryxos.jar chat
 
-# 或常驻：REST API + 只读管理台 + OpenAPI 文档，同一个进程、同一个端口
+# 或常驻：REST API + 管理台（定时任务页可写）+ OpenAPI 文档，同一个进程、同一个端口
 java -jar oryxos-boot/target/oryxos.jar serve
 #   REST      http://localhost:8080/api/v1
 #   管理台    http://localhost:8080/admin/
@@ -46,7 +46,7 @@ OryxOS 只有一个交付物：fat JAR `oryxos-boot/target/oryxos.jar`，主类�
 |------|------|
 | `--version` / `status` / `profile …` 等轻命令 | 直接读文件，不启动 Spring（启动快） |
 | `chat` | 交互式对话 |
-| `serve` | 启动 Spring Boot + Web 容器，对外提供 REST API（`/api/v1`）、只读管理台（`/admin/`）、OpenAPI 文档（`/swagger-ui`）与定时任务 |
+| `serve` | 启动 Spring Boot + Web 容器，对外提供 REST API（`/api/v1`）、管理台（`/admin/`）、OpenAPI 文档（`/swagger-ui`）与定时任务 |
 | `gateway` | 常驻模式，只跑定时任务、不对外提供 HTTP |
 
 > 第 18 节之前还有一个 `OryxosApplication` 启动类，它已随第 26 节删除——宽扫描根会与 CLI 的装配相互撞车，且 `serve` 已经能起 Web 容器，它没有存在的理由。

@@ -97,3 +97,5 @@ http:
     - open.feishu.cn                # 飞书群机器人
     - open.larksuite.com            # Lark(与飞书同一套协议)
     - qyapi.weixin.qq.com           # 企业微信群机器人
+    - api.open-meteo.com            # 第 28 节：每日天气 Demo 的免 key 天气接口
+    - api.github.com                # 第 31 节 Demo 前置：GitHub 日报的接口域（脚本走子进程,列在此处便于审计）

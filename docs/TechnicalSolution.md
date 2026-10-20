@@ -549,6 +549,14 @@ Channel 是 Agent 对外的消息接入入口，主要解决"消息进来、响�
 - **契约在 core、实现在 storage**（依赖倒置）：`ScheduledTaskStore` 接口（`reconcile`/`retire`/`recordExecution`/`isEnabled`/`setEnabled`/`list`/`executions`）放 `oryxos-core`，`AgentScheduler` 依赖它；JPA 实现 `JpaScheduledTaskStore` 放 `oryxos-storage`。`reconcile(profileName, key, ...)` 为同一配置任务复用稳定 `scheduleId`，调度锁、启停、立即执行和历史均使用该 ID；删改 key 时旧记录退役而不删历史。
 - **v2 管理端点**（前缀 `/api/v2`）：`GET /schedules`、`GET /schedules/{scheduleId}/executions`、`POST /schedules/{scheduleId}/run`、`PUT /schedules/{scheduleId}`，以及按定义精确定位的 `POST /agents/{profileName}/schedules/{key}/run`。管理台只调用 v2；v1 仍可按旧 key 兼容，但当多个 Agent 使用同一 key 时返回 HTTP 409，绝不再静默选择第一条。
 
+> **2026-10-20 修订注（第 28 节实现口径：按课件 v1，用户裁决）**：上面「状态持久化与可管理」段写的是 **v2 设计**；第 28 节交付时按**课件 v1** 落地（用户裁决「按课件」，v2 的稳定主键 / 退役语义 / v1-v2 并存留待扩展阶段）。差异逐条如实记录：
+>
+> ① **端点前缀是 `/api/v1`，不另开 `/api/v2`**：`GET /api/v1/schedules`、`GET /api/v1/schedules/{id}/executions`、`POST /api/v1/schedules/{id}/run`、`PUT /api/v1/schedules/{id}`。**没有** `POST /agents/{profileName}/schedules/{key}/run`，也没有「同 key 多 Agent 时 409」——核心阶段只有一套 id 方案，不存在 v1/v2 并存的歧义。
+> ② **主键 `task_id` = `<profileName>#<序号>`**（与第 25 节 `AgentScheduler` 派生的任务 id 同源），不是 v2 的「稳定 `schedule_id` + `profile_name` + `schedule_key` + `display_name`」四件套。列：`task_id` / `profile_name` / `cron` / `zone` / `message` / `enabled` / `next_run_at` / `last_run_at` / `last_status` / `run_count` / `updated_at`；历史表 `task_executions`：`id` / `task_id` / `session_id` / `started_at` / `success` / `error_message` / `duration_ms`。
+> ③ **没有 `retired` 字段与退役语义**（v1 的已知边界）：`registerAll()` 走 `register`——已存在的行只更新定义面（cron / zone / message / nextRunAt），**保留 `enabled` 与运行态**；`AGENT.md` 里删掉的任务在库里**留下旧行**，`GET /schedules` 照旧列出、`POST .../run` 对它返回 404（`runNow` 查内存里的已注册任务）。退役（`retire`）随扩展阶段补。
+> ④ **`ScheduledTaskStore` 方法按 v1 收窄**：`register` / `recordExecution` / `isEnabled` / `setEnabled` / `find` / `list` / `executions`，**没有** `retire`。
+> ⑤ **实现类落 `oryxos-core` 不落 `oryxos-storage`**（与上段写的相反）：本仓依赖方向是 `oryxos-core → oryxos-storage`，JPA 实体 + Repository 在 storage、`JpaScheduledTaskStore` 在 core——与第 18 节 `JpaSessionService` 同款先例。把实现放 storage 会迫使 storage 反向依赖 core（成环）或把接口下沉。
+
 **核心阶段 vs 扩展阶段的边界。** 核心阶段的 `schedules` **定义**只能写在 `AGENT.md` frontmatter 里，跟着进程启动一起注册，改 cron / 新增任务要重启（或触发重新加载）才生效；第 28 节补齐的是任务的**状态持久化与运行控制**（查看 / 执行历史 / 立即执行 / 启用停用），不含通过 API 增删改 cron 定义。"业务方通过 Web Service 上传一个 Agent 目录（`AGENT.md` 带 `schedules` frontmatter）、由此定义一个新 Agent 并让它定时自动运行"这个完整闭环，依赖的是 7.3 里扩展阶段才补齐的两个能力——Agent 目录上传接口（含一句话生成）、`AgentScheduler` 的运行时增删接口——核心阶段这条链路要靠手动丢目录走通，扩展阶段补上后才是纯 API、免重启的闭环。
 
 ### 8.6 三种运行模式

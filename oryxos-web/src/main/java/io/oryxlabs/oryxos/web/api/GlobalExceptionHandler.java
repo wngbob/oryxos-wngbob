@@ -3,6 +3,7 @@ package io.oryxlabs.oryxos.web.api;
 import io.oryxlabs.oryxos.provider.ProviderUnavailableException;
 import io.oryxlabs.oryxos.web.error.AgentTimeoutException;
 import io.oryxlabs.oryxos.web.error.ProfileNotFoundException;
+import io.oryxlabs.oryxos.web.error.ScheduleNotFoundException;
 import io.oryxlabs.oryxos.web.error.SessionNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,6 +72,13 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(ProfileNotFoundException.class)
   public ResponseEntity<ApiResponse<Void>> profileNotFound(ProfileNotFoundException ex) {
     log.warn("agent not found: {}", sanitizeForLog(ex.getMessage()));
+    return notFoundWith(ex);
+  }
+
+  /** 定时任务不存在（第 28 节）：与另外两个「不存在」共用 404 档。 */
+  @ExceptionHandler(ScheduleNotFoundException.class)
+  public ResponseEntity<ApiResponse<Void>> scheduleNotFound(ScheduleNotFoundException ex) {
+    log.warn("schedule not found: {}", sanitizeForLog(ex.getMessage()));
     return notFoundWith(ex);
   }
 

@@ -14,6 +14,8 @@ import io.oryxlabs.oryxos.core.profile.Profile;
 import io.oryxlabs.oryxos.core.profile.ProfileLoader;
 import io.oryxlabs.oryxos.core.profile.ProfileRegistry;
 import io.oryxlabs.oryxos.core.schedule.AgentScheduler;
+import io.oryxlabs.oryxos.core.schedule.JpaScheduledTaskStore;
+import io.oryxlabs.oryxos.core.schedule.ScheduledTaskStore;
 import io.oryxlabs.oryxos.core.session.JpaSessionService;
 import io.oryxlabs.oryxos.core.session.SessionService;
 import io.oryxlabs.oryxos.core.tool.OryxTool;
@@ -33,7 +35,9 @@ import io.oryxlabs.oryxos.provider.ToolSchemaAdapter;
 import io.oryxlabs.oryxos.storage.repository.LlmCallRepository;
 import io.oryxlabs.oryxos.storage.repository.MemoryEntryRepository;
 import io.oryxlabs.oryxos.storage.repository.NotifyChannelRepository;
+import io.oryxlabs.oryxos.storage.repository.ScheduledTaskRepository;
 import io.oryxlabs.oryxos.storage.repository.SessionRepository;
+import io.oryxlabs.oryxos.storage.repository.TaskExecutionRepository;
 import io.oryxlabs.oryxos.storage.repository.ToolInvocationRepository;
 import io.oryxlabs.oryxos.tool.builtin.FileTools;
 import io.oryxlabs.oryxos.tool.builtin.HttpTools;
@@ -155,6 +159,22 @@ public class CliAssemblyConfiguration {
   @Bean
   public SessionService sessionService(SessionRepository sessionRepository) {
     return new JpaSessionService(sessionRepository);
+  }
+
+  /**
+   * 定时任务登记与执行历史的持久化接缝（第 28 节）。
+   *
+   * <p>实现落 core、实体与 Repository 落 storage——与 {@link #sessionService} 同一条依赖方向（{@code core →
+   * storage}）， storage 不反向依赖 core。
+   *
+   * @param taskRepository {@code scheduled_tasks} 的存取出口
+   * @param executionRepository {@code task_executions} 的存取出口
+   * @return JPA 实现
+   */
+  @Bean
+  public ScheduledTaskStore scheduledTaskStore(
+      ScheduledTaskRepository taskRepository, TaskExecutionRepository executionRepository) {
+    return new JpaScheduledTaskStore(taskRepository, executionRepository);
   }
 
   /**
@@ -714,6 +734,7 @@ public class CliAssemblyConfiguration {
    * @param profileRegistry 已装载 Profile 的内存索引（schedules 段的来源）
    * @param agentService 三种触发源的统一处理入口
    * @param sessionService 钟推会话的取或建接缝
+   * @param scheduledTaskStore 任务登记与执行历史的持久化接缝（第 28 节）
    * @return 定时任务调度器
    */
   @Bean
@@ -721,8 +742,10 @@ public class CliAssemblyConfiguration {
       ThreadPoolTaskScheduler taskScheduler,
       ProfileRegistry profileRegistry,
       AgentService agentService,
-      SessionService sessionService) {
-    return new AgentScheduler(taskScheduler, profileRegistry, agentService, sessionService);
+      SessionService sessionService,
+      ScheduledTaskStore scheduledTaskStore) {
+    return new AgentScheduler(
+        taskScheduler, profileRegistry, agentService, sessionService, scheduledTaskStore);
   }
 
   /**

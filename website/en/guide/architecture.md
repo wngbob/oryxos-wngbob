@@ -29,7 +29,7 @@
 | `oryxos-memory` | Session memory + long-term memory with three backends (Markdown / SQLite / Mem0) |
 | `oryxos-tool` | 15 built-in tools, Plugin Tool three-tier extension, ToolRegistry, MCP client, Sandbox |
 | `oryxos-channel-cli` | CLI interactive channel |
-| `oryxos-web` | 11 REST endpoints, read-only admin console, OpenAPI |
+| `oryxos-web` | 15 REST endpoints, admin console (only the schedules page can write), OpenAPI |
 | `oryxos-storage` | SQLite persistence (sessions, audit, memory, notification channels) |
 | `oryxos-cli` | Picocli main entry (15 subcommands) and `ConfigLoader` |
 | `oryxos-boot` | Spring Boot assembly and dependency aggregation, producing the fat JAR (`oryxos.jar`, main class `OryxOsCli`) |

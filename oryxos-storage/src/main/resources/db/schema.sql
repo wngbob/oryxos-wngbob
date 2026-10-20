@@ -93,3 +93,40 @@ CREATE TABLE IF NOT EXISTS memory_entries (
 
 -- 按分区取数的索引:三处查询(核心区升序全量 / 归档区降序取最近 N 条 / 归档区 LIKE 检索)全部先按 scope 过滤。
 CREATE INDEX IF NOT EXISTS idx_memory_scope ON memory_entries (scope);
+
+-- 定时任务登记表(第 28 节新建)
+-- 定义真相仍是 AGENT.md 的 schedules 段,cron / zone / message 只是注册时抄下的快照,
+-- 用于在没有 Profile 的情况下也能展示与管理。改定义仍然改文件、重启后重新登记。
+-- 主键是业务键 task_id(形如 weather-agent#1),不用自增:同一任务跨重启必须复用同一行。
+-- enabled 是用户的决定,重启重新登记 MUST NOT 把它冲掉(登记只更新定义面与 next_run_at)。
+-- 重名任务? task_id 由 Profile 名 + 配置内序号确定性派生,两条相同规则是两个 id,故不存在冲突。
+CREATE TABLE IF NOT EXISTS scheduled_tasks (
+    task_id      VARCHAR(160) PRIMARY KEY,
+    profile_name VARCHAR(128),
+    cron         VARCHAR(128),
+    zone         VARCHAR(64),
+    message      TEXT,
+    enabled      BOOLEAN,
+    next_run_at  TIMESTAMP,
+    last_run_at  TIMESTAMP,
+    last_status  VARCHAR(16),
+    run_count    INTEGER,
+    updated_at   TIMESTAMP
+);
+
+-- 定时任务执行历史(第 28 节新建)
+-- 成功失败都记,与 tool_invocations / llm_calls 同一条审计纪律。停用期间不执行、不记。
+-- task_id 是普通列而不是外键:任务被删除后历史行仍应保留(可追溯),核心阶段不做级联删除。
+-- id 显式 INTEGER PRIMARY KEY AUTOINCREMENT,只有 INTEGER PRIMARY KEY 才是 rowid 别名。
+CREATE TABLE IF NOT EXISTS task_executions (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id       VARCHAR(160),
+    session_id    VARCHAR(128),
+    started_at    TIMESTAMP,
+    success       BOOLEAN,
+    error_message TEXT,
+    duration_ms   BIGINT
+);
+
+-- 按任务取执行历史的索引:管理台先看任务列表,再点开某一个任务看历史(最近的在前)。
+CREATE INDEX IF NOT EXISTS idx_task_executions_task ON task_executions (task_id);

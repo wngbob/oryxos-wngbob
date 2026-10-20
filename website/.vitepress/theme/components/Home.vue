@@ -74,7 +74,7 @@ const zh = {
       { name: 'ReAct 循环', desc: '自实现推理引擎：思考 → 调工具 → 看结果 → 再决定，行为完全可控' },
       { name: 'Memory 记忆', desc: '会话 + 长期两层记忆，跨对话记住用户偏好、项目背景、关键决策' },
       { name: 'Tool 工具体系', desc: '内置 15 个工具，零代码到重代码三档扩展，白名单沙箱强制隔离' },
-      { name: 'Web Service', desc: '11 个 REST 端点统一暴露全部能力；同一端口提供只读管理台与 OpenAPI 文档' }
+      { name: 'Web Service', desc: '15 个 REST 端点统一暴露全部能力；同一端口提供管理台（定时任务页可写）与 OpenAPI 文档' }
     ]
   },
   arch: {
@@ -115,7 +115,7 @@ const zh = {
     title: '路线图',
     motto: '慢就是快，克制且聚焦。先把单机的运行时内核做扎实，再逐步生长出分布式能力。',
     phases: [
-      { tag: '阶段一 · 当前', name: '单机运行时内核', desc: '五大核心能力已跑通：配置即 Agent、多 Agent 并存、REST API 与只读管理台、对接 MCP；正在收尾验收 Demo' },
+      { tag: '阶段一 · 当前', name: '单机运行时内核', desc: '五大核心能力已跑通：配置即 Agent、多 Agent 并存、REST API 与管理台（定时任务页可写）、对接 MCP；正在收尾验收 Demo' },
       { tag: '阶段二 · 规划', name: '底座分布式', desc: '节点无状态化、状态外置、多副本部署，支撑更大规模与高可用' },
       { tag: '阶段三 · 愿景', name: '跨节点 Agent 协作', desc: '引入 Agent 通信底座，对接 A2A，跨节点发现、委托、可靠异步协同' }
     ],
@@ -201,7 +201,7 @@ const en = {
       { name: 'ReAct Loop', desc: 'Self-implemented reasoning engine: think → act → observe → decide. Fully controllable' },
       { name: 'Memory', desc: 'Session + long-term memory that keeps user preferences and project context across conversations' },
       { name: 'Tool System', desc: '15 built-in tools, three extension tiers from zero-code to full-code, whitelist sandbox' },
-      { name: 'Web Service', desc: '11 REST endpoints expose every capability; a read-only admin console and OpenAPI docs on the same port' }
+      { name: 'Web Service', desc: '15 REST endpoints expose every capability; an admin console (writable schedules page) and OpenAPI docs on the same port' }
     ]
   },
   arch: {
@@ -242,7 +242,7 @@ const en = {
     title: 'Roadmap',
     motto: 'Slow is fast: restrained and focused. Nail the single-node runtime kernel first, then grow distributed capabilities.',
     phases: [
-      { tag: 'Phase 1 · Now', name: 'Single-node Runtime Kernel', desc: 'Five core capabilities are up: configuration-as-Agent, multi-Agent coexistence, REST API plus read-only admin console, MCP integration; wrapping up acceptance demos' },
+      { tag: 'Phase 1 · Now', name: 'Single-node Runtime Kernel', desc: 'Five core capabilities are up: configuration-as-Agent, multi-Agent coexistence, REST API plus admin console (writable schedules page), MCP integration; wrapping up acceptance demos' },
       { tag: 'Phase 2 · Planned', name: 'Distributed Harness', desc: 'Stateless nodes, external state, multi-replica deployment for scale and high availability' },
       { tag: 'Phase 3 · Vision', name: 'Cross-node Agent Collaboration', desc: 'Agent communication fabric over A2A: cross-node discovery, delegation, reliable async coordination' }
     ],

@@ -6,6 +6,8 @@
 
 > **2026-10-20 修订注（第 27 节）**：核心阶段端点已由 10 个增至 **11** 个——第 27 节补了 `GET /api/v1/sessions`（最近 100 条会话摘要，不含 `messages`；`?status=active|archived` 可选，过滤作用于该窗口内，非法值 400）。本文件其余十个端点的逐字契约不变；新端点的契约与验收见 `specs/010-human-trigger-flow/`。
 
+> **2026-10-20 修订注（第 28 节）**：核心阶段端点已由 11 个增至 **15** 个——第 28 节交付定时任务子系统的四条：`GET /api/v1/schedules`（全量任务视图，含定义面 + 运行态）、`GET /api/v1/schedules/{id}/executions`（执行历史，倒序）、`POST /api/v1/schedules/{id}/run`（立即执行，**同步**跑完才返回）、`PUT /api/v1/schedules/{id}`（只改 `enabled`）。任务 id 形如 `<Agent 名>#<序号>`，**含 `#`**——客户端必须走 URI 模板变量（`/api/v1/schedules/{id}/run`）或对它做 URL 编码，手工拼 `%23` 再交给会二次编码的客户端会得到 404。本文件其余十一个端点的逐字契约不变；新端点的契约见 `specs/011-scheduler-runtime/`，管理台写面的边界见 [admin-console.md](./admin-console.md) §3/§4 的 2026-10-20（第 28 节）修订注。
+
 **通用约定**
 
 - 基址：`/api/v1`，只在 `oryxos serve` 下提供（`chat` / `gateway` 不起 HTTP 容器）。

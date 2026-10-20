@@ -23,7 +23,7 @@ java -jar oryxos-boot/target/oryxos.jar profile create my-assistant
 export DEEPSEEK_API_KEY=sk-...
 java -jar oryxos-boot/target/oryxos.jar chat
 
-# Or run resident: REST API + read-only admin console + OpenAPI docs, one process, one port
+# Or run resident: REST API + admin console (schedules page can write) + OpenAPI docs, one process, one port
 java -jar oryxos-boot/target/oryxos.jar serve
 #   REST      http://localhost:8080/api/v1
 #   Admin     http://localhost:8080/admin/
@@ -46,7 +46,7 @@ OryxOS ships a single artifact: the fat JAR `oryxos-boot/target/oryxos.jar`, who
 |-----------|---------|
 | `--version` / `status` / `profile …` (light commands) | Read files directly, no Spring context (fast startup) |
 | `chat` | Interactive conversation |
-| `serve` | Starts Spring Boot + web container: REST API (`/api/v1`), read-only admin console (`/admin/`), OpenAPI docs (`/swagger-ui`), and scheduled tasks |
+| `serve` | Starts Spring Boot + web container: REST API (`/api/v1`), admin console (`/admin/`), OpenAPI docs (`/swagger-ui`), and scheduled tasks |
 | `gateway` | Long-running mode that only runs scheduled tasks, no HTTP endpoints |
 
 > Before lesson 18 there was also an `OryxosApplication` class. It was deleted in lesson 26 — its broad scan root collided with the CLI assembly, and `serve` already starts the web container, so it had no reason to exist.

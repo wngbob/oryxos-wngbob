@@ -41,7 +41,7 @@ onMounted(startRouter)
         <img class="brand-logo" :src="logoIcon" alt="OryxOS" />
         <div class="brand-text">
           <div class="brand-name">OryxOS</div>
-          <span class="brand-sub">管理台 · 只读</span>
+          <span class="brand-sub">管理台</span>
         </div>
       </div>
 
@@ -59,7 +59,7 @@ onMounted(startRouter)
         </a>
       </nav>
 
-      <footer class="foot">数据全部来自 /api/v1 · 只读</footer>
+      <footer class="foot">数据全部来自 /api/v1 · 仅定时任务页可写</footer>
     </aside>
 
     <main class="content">

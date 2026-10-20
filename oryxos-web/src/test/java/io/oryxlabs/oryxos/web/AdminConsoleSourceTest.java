@@ -17,7 +17,12 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 /**
- * 只读纪律的机器判卷（contracts/admin-console.md §4，FR-013）。
+ * 管理台读写边界的机器判卷（contracts/admin-console.md §4）。
+ *
+ * <p><b>修订注（2026-10-20，第 28 节）：</b>本类原判「整站只读」。第 28 节按课件交付管理台第一页 带写操作的「定时任务」页（立即执行 /
+ * 启用停用），经用户裁决<b>精确开写口</b>：写方法只允许出现在 {@code SchedulesView.vue} 与唯一数据通道 {@code api.js}，且页面只能经 {@code
+ * api.js} 的 {@code post} / {@code put} 打 {@code /api/v1/schedules/**}；其余六页仍逐文件判只读。
+ * <b>断言只收紧不改松</b>：没有删任何一条，新增了「其它页面 MUST NOT 出现 post(/put(」与 「定时任务页 MUST NOT 直接 fetch」两条。
  *
  * <p><b>为什么读源码而不是跑浏览器</b>：本节前端是纯展示台，没有前端测试基建（research D3 已决定不挂 {@code npm test}）。
  * 源码断言零额外依赖、零构建时长，却能抓住「有人加了个删除按钮」「有人把路径写成完整 URL 绕过同源」这类回归。
@@ -31,10 +36,14 @@ class AdminConsoleSourceTest {
   private static final Path SRC_ROOT = FRONTEND_ROOT.resolve("src");
   private static final Path VIEWS_ROOT = SRC_ROOT.resolve("views");
   private static final Path API_MODULE = SRC_ROOT.resolve("api.js");
+  private static final Path SCHEDULES_VIEW = VIEWS_ROOT.resolve("SchedulesView.vue");
   private static final Path INDEX_HTML = FRONTEND_ROOT.resolve("index.html");
 
-  /** 写操作动词：出现任意一个就说明管理台不再是只读的。 */
+  /** 写操作动词：除定时任务页与 api.js 外出现任意一个就说明越界了。 */
   private static final List<String> WRITE_METHODS = List.of("POST", "PUT", "PATCH", "DELETE");
+
+  /** 页面里直接调写助手的形状（{@code input(} 之类的子串不算，故用词边界）。 */
+  private static final Pattern WRITE_CALL = Pattern.compile("\\b(post|put)\\(");
 
   /** 写操作按钮文案（契约 §4 第 5 条给出的五个词）。 */
   private static final List<String> WRITE_BUTTON_TEXTS = List.of("新建", "删除", "编辑", "保存", "提交");
@@ -48,8 +57,8 @@ class AdminConsoleSourceTest {
    * <p>概览页读的是运行时状态（Agent 数 / 活跃会话 / 工具数 / 运行时长 / 健康），端点全是既有那四个； 2026-10-20
    * 用户澄清后它不再是静态快照，故与其余各页一样受「页面不是空壳」这条判卷。
    *
-   * <p>定时任务页同样只读既有端点：`AGENT.md` 的 `schedules` 由 `GET /api/v1/profiles` 的 `ProfileView.schedules`
-   * 带出来，故本页**没有**新增 REST 路径（2026-10-20 用户裁决：渠道页本轮不加， 渠道管理仍挂扩展阶段——`notify_channels` 至今没有查询端点）。
+   * <p>定时任务页在 2026-10-20（第 28 节）改为读 `GET /api/v1/schedules`：定义与运行状态（下次触发 / 上次结果 / 次数 /
+   * 启用与否）一起由服务端给出，`AGENT.md` 仍是定义真相源。渠道页本轮仍不加， 渠道管理仍挂扩展阶段——`notify_channels` 至今没有查询端点。
    */
   private static final Map<String, List<String>> VIEW_ENDPOINTS = viewEndpoints();
 
@@ -61,20 +70,47 @@ class AdminConsoleSourceTest {
   }
 
   @Test
-  void onlyGetMethodIsUsed() throws IOException {
+  void writeMethodsAreConfinedToSchedulesPage() throws IOException {
     for (Path file : sourceFiles()) {
       String source = Files.readString(file, StandardCharsets.UTF_8);
+      if (file.equals(API_MODULE)) {
+        // 唯一数据通道：GET 显式声明；只开 POST / PUT 两个写助手，PATCH / DELETE 仍不许出现
+        assertThat(source)
+            .as("api.js 必须显式用 GET 发请求，并按第 28 节只导出 POST / PUT 两个写助手")
+            .contains("fetch(")
+            .contains("method: 'GET'")
+            .contains("'POST'")
+            .contains("'PUT'");
+        for (String method : List.of("PATCH", "DELETE")) {
+          assertThat(Pattern.compile("\\b" + method + "\\b").matcher(source).find())
+              .as("api.js MUST NOT 出现 %s", method)
+              .isFalse();
+        }
+        continue;
+      }
+      if (file.equals(SCHEDULES_VIEW)) {
+        // 写口只打定时任务路径，且必须经 api.js——页面里直接 fetch 等于绕过唯一通道
+        assertThat(source)
+            .as("定时任务页的写操作只能打 /api/v1/schedules/**，且经 api.js")
+            .contains("post('/api/v1/schedules/")
+            .contains("put('/api/v1/schedules/")
+            .doesNotContain("fetch(");
+        for (String method : List.of("PATCH", "DELETE")) {
+          assertThat(Pattern.compile("\\b" + method + "\\b").matcher(source).find())
+              .as("SchedulesView.vue MUST NOT 出现 %s", method)
+              .isFalse();
+        }
+        continue;
+      }
       for (String method : WRITE_METHODS) {
         assertThat(Pattern.compile("\\b" + method + "\\b").matcher(source).find())
-            .as("%s MUST NOT 出现 %s；管理台是只读的（FR-013）", relative(file), method)
+            .as("%s MUST NOT 出现 %s；除定时任务页外管理台仍是只读的", relative(file), method)
             .isFalse();
       }
+      assertThat(WRITE_CALL.matcher(source).find())
+          .as("%s MUST NOT 调用写助手 post/put；第 28 节的写口只开给定时任务页", relative(file))
+          .isFalse();
     }
-    // 唯一的数据通道显式声明 GET：不写 method 时 fetch 默认也是 GET，但「显式」才能被判卷
-    assertThat(Files.readString(API_MODULE, StandardCharsets.UTF_8))
-        .as("api.js 必须显式用 GET 发请求")
-        .contains("fetch(")
-        .contains("method: 'GET'");
   }
 
   @Test
@@ -179,7 +215,7 @@ class AdminConsoleSourceTest {
     map.put("SessionsView.vue", List.of("/api/v1/sessions/"));
     map.put("ProfilesView.vue", List.of("/api/v1/profiles"));
     map.put("ToolsView.vue", List.of("/api/v1/tools"));
-    map.put("SchedulesView.vue", List.of("/api/v1/profiles"));
+    map.put("SchedulesView.vue", List.of("/api/v1/schedules"));
     map.put("MemoryView.vue", List.of("/api/v1/memory"));
     map.put("StatusView.vue", List.of("/api/v1/health", "/api/v1/info"));
     return map;
