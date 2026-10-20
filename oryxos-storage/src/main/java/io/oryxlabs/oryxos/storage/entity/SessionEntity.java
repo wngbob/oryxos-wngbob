@@ -31,7 +31,12 @@ public class SessionEntity {
   @Column(name = "profile_name", length = 128)
   private String profileName;
 
-  /** 接入渠道：{@code cli} / {@code api} / {@code scheduler} / {@code gateway}。 */
+  /**
+   * 接入渠道：{@code cli} / {@code web} / {@code scheduler} / {@code gateway}。
+   *
+   * <p>（修订注，2026-10-19：此处原写 {@code api}。HTTP 入口的渠道字面量在第 26 节定为 {@code web}—— 与 CLI 的 {@code cli}
+   * 同名同形，「{@code api}」是只描述协议、不描述入口的旧名。）
+   */
   @Column(name = "channel", length = 32)
   private String channel;
 

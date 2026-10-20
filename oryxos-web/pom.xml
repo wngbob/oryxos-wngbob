@@ -11,17 +11,116 @@
 
     <artifactId>oryxos-web</artifactId>
     <name>oryxos-web</name>
-    <description>能力五（Web Service）：WebServer、6 个 ApiController、GlobalExceptionHandler、OpenAPI。springdoc-openapi 在 US-5 落地时引入</description>
+    <description>能力五（Web Service）：6 个 ApiController、GlobalExceptionHandler、OpenAPI、只读管理台静态资源。</description>
+
+    <properties>
+        <!--
+          默认 false：一条 `mvn package` 从源码到 fat JAR 全量产出（理中研 D1）。
+          跳过路径专供「只验 Java、不碰前端」的本地迭代与测试：-Dfrontend.skip=true。
+          注意：跳过时 static/admin/ 不会生成，管理台的浏览器验证必须用完整构建。
+        -->
+        <frontend.skip>false</frontend.skip>
+    </properties>
 
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
-        <!-- OpenAPI 3.0 文档 + Swagger UI（工程地基；6 个 ApiController 随 US-5 落地） -->
+        <!-- OpenAPI 3.0 文档 + Swagger UI（工程地基；6 个 ApiController 随第 26 节落地） -->
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
         </dependency>
+
+        <!--
+          第 26 节新增的四条模块依赖边：Controller 只做参数校验 / 响应包装 / 错误处理，
+          实际逻辑全部委托核心层既有服务（FR-002），故需要直接 import 这四类类型。
+          方向仍是「oryxos-web → 能力模块」，没有任何模块反向依赖 oryxos-web。
+        -->
+        <dependency>
+            <groupId>io.oryxlabs</groupId>
+            <artifactId>oryxos-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.oryxlabs</groupId>
+            <artifactId>oryxos-provider</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.oryxlabs</groupId>
+            <artifactId>oryxos-memory</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.oryxlabs</groupId>
+            <artifactId>oryxos-tool</artifactId>
+        </dependency>
+
+        <!-- @SuppressFBWarnings 注解所在 jar（纯注解、provided，不进产物）：DatabaseHealthProbe 的依赖注入字段
+             被 SpotBugs 判成 EI_EXPOSE_REP2，按父 pom 既定口径「就地注解豁免比全局 exclude 更可审计」处理 -->
+        <dependency>
+            <groupId>com.github.spotbugs</groupId>
+            <artifactId>spotbugs-annotations</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+              管理台构建串联（research D1）：npm install + npm run build 绑进 generate-resources，
+              Vite 把产物直接写进 src/main/resources/static/admin/，随后由 maven-resources-plugin
+              拷进 classes/、最终进 fat JAR。一条 mvn package 出全量发行物，不需要额外的发布步骤。
+              刻意不绑 npm test：前端是纯展示台、无前端测试基建（research D3），只读纪律由
+              AdminConsoleSourceTest 做源码断言判卷。
+            -->
+            <plugin>
+                <groupId>com.github.eirslett</groupId>
+                <artifactId>frontend-maven-plugin</artifactId>
+                <version>2.0.2</version>
+                <configuration>
+                    <workingDirectory>src/main/frontend</workingDirectory>
+                    <installDirectory>${project.build.directory}</installDirectory>
+                    <skip>${frontend.skip}</skip>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>install-node-and-npm</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>install-node-and-npm</goal>
+                        </goals>
+                        <configuration>
+                            <!-- 与上游同款；npm 用 node 自带的那一份，不单独声明 npmVersion -->
+                            <nodeVersion>v20.18.0</nodeVersion>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>npm-install</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>install</arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>npm-build</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>run build</arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

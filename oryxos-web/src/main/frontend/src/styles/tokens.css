@@ -1,0 +1,303 @@
+/*
+ * 设计令牌 —— 唯一真相源是 website/.vitepress/theme/custom.css（官网首页运行的就是那一份）。
+ *
+ * 下面第一段 :root 与 media 查询里的深色档，逐字取自 custom.css 的 :root / .dark，
+ * 一个值都不许自创：AdminThemeSourceTest 逐字比对这两段，改了官网却不改这里会红。
+ *
+ * 2026-10-20（用户裁决）起，管理台不再固定「深色底」：外观与官网完全一致——
+ * 默认是首页的浅色档，系统偏好深色时切到官网的深色档（VitePress 的默认行为同样是跟随系统）。
+ * 故 index.html 的 <html> 不带 class="dark"，两档由 prefers-color-scheme 决定。
+ */
+:root {
+  --vp-c-brand-1: #d97706;
+  --vp-c-brand-2: #f59e0b;
+  --vp-c-brand-3: #fbbf24;
+  --vp-c-brand-soft: rgba(245, 158, 11, 0.16);
+
+  /* 首页设计变量（浅色） */
+  --ox-bg: #ffffff;
+  --ox-bg-soft: #f7f8fa;
+  --ox-card: #ffffff;
+  --ox-border: #e6e8eb;
+  --ox-text: #0f172a;
+  --ox-text-2: #52606d;
+  --ox-brand: #f59e0b;
+  --ox-brand-deep: #d97706;
+  --ox-navy: #0c1424;
+  --ox-navy-2: #16213a;
+  --ox-glow: rgba(245, 158, 11, 0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --vp-c-brand-1: #fbbf24;
+    --vp-c-brand-2: #f59e0b;
+    --vp-c-brand-3: #d97706;
+    --vp-c-brand-soft: rgba(245, 158, 11, 0.16);
+
+    /* 首页设计变量（深色） */
+    --ox-bg: #0b1220;
+    --ox-bg-soft: #0e1626;
+    --ox-card: #111c33;
+    --ox-border: #1f2c47;
+    --ox-text: #e5e7eb;
+    --ox-text-2: #94a3b8;
+    --ox-brand: #fbbf24;
+    --ox-brand-deep: #f59e0b;
+    --ox-navy: #070d1a;
+    --ox-navy-2: #0c1424;
+    --ox-glow: rgba(245, 158, 11, 0.08);
+  }
+}
+
+/* 字体栈：与官网同一份 */
+:root {
+  --vp-font-family-base:
+    'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+    'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --vp-font-family-mono:
+    'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+/*
+ * 管理台增量：官网是宣传页，没有「成功 / 警告 / 失败」的表达需求，也没有把圆角抽成变量
+ * （首页用字面量 14px 卡片 / 10px 按钮 / 8px 徽标，这里照抄成同一套刻度）。
+ * 状态色按浅深两档给值：同一个语义色在白底与深底上都要够读，故不能只有一份。
+ */
+:root {
+  --ox-ok: #15803d;
+  --ox-warn: #b45309;
+  --ox-err: #b91c1c;
+  --ox-radius-card: 14px;
+  --ox-radius-control: 10px;
+  --ox-radius-chip: 8px;
+  --ox-shadow-card: 0 6px 16px -8px rgba(15, 23, 42, 0.18);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ox-ok: #4ade80;
+    --ox-warn: #fbbf24;
+    --ox-err: #f87171;
+    --ox-shadow-card: 0 6px 16px -8px rgba(0, 0, 0, 0.5);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+/* 页面底色用首页的 soft 档、卡片用白底：卡片才浮得起来（首页也是这一层关系） */
+body {
+  margin: 0;
+  background: var(--ox-bg-soft);
+  color: var(--ox-text);
+  font-family: var(--vp-font-family-base);
+  font-size: 14px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--ox-brand-deep);
+  text-decoration: none;
+}
+
+code,
+pre,
+.mono {
+  font-family: var(--vp-font-family-mono);
+  font-size: 12.5px;
+}
+
+pre {
+  margin: 0;
+  padding: 14px 16px;
+  overflow: auto;
+  background: var(--ox-bg-soft);
+  border: 1px solid var(--ox-border);
+  border-radius: var(--ox-radius-control);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ============ 与首页同款的版式元素 ============ */
+
+/* 小号色块字（首页的 WHY / CAPABILITIES 那一行） */
+.eyebrow {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--ox-brand-deep);
+  text-transform: uppercase;
+}
+
+/* 页面标题（首页区块标题的同一比例） */
+.page-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  line-height: 1.25;
+}
+
+.card {
+  background: var(--ox-card);
+  border: 1px solid var(--ox-border);
+  border-radius: var(--ox-radius-card);
+  padding: 22px;
+  margin-bottom: 18px;
+  transition: border-color 0.15s ease;
+}
+
+.card:hover {
+  border-color: var(--ox-brand);
+}
+
+.card-title {
+  margin: 0 0 14px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ox-text);
+}
+
+/* 表格：白底卡片里用行分隔线；表头压在 soft 底上，机读列用等宽字体（加 .mono） */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--ox-border);
+}
+
+.table thead th {
+  background: var(--ox-bg-soft);
+  color: var(--ox-text-2);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.table tbody tr:hover {
+  background: var(--ox-bg-soft);
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+/* 窄屏表格横向滚动，不撑破布局 */
+.table-wrap {
+  overflow-x: auto;
+}
+
+/* 三态：加载 / 空 / 错 —— 任何一页都不许白屏（契约 §6） */
+.state {
+  padding: 24px;
+  color: var(--ox-text-2);
+  text-align: center;
+}
+
+.state-error {
+  color: var(--ox-err);
+  text-align: left;
+}
+
+/* 状态标签：首页徽标的 999px 药丸形 + 品牌描边 */
+.tag {
+  display: inline-block;
+  padding: 1px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--ox-border);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.tag-ok {
+  color: var(--ox-ok);
+  border-color: currentColor;
+}
+
+.tag-warn {
+  color: var(--ox-warn);
+  border-color: currentColor;
+}
+
+.tag-err {
+  color: var(--ox-err);
+  border-color: currentColor;
+}
+
+.muted {
+  color: var(--ox-text-2);
+}
+
+/* 按钮：照首页 .ox-btn 两档（实心品牌 / 描边幽灵） */
+.btn {
+  display: inline-block;
+  padding: 9px 20px;
+  border: 1px solid transparent;
+  border-radius: var(--ox-radius-control);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.btn-primary {
+  background: var(--ox-brand);
+  border-color: var(--ox-brand);
+  color: #1a1205;
+  box-shadow: 0 8px 20px -8px rgba(245, 158, 11, 0.55);
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 26px -8px rgba(245, 158, 11, 0.65);
+}
+
+.btn-ghost {
+  background: var(--ox-card);
+  border-color: var(--ox-border);
+  color: var(--ox-text);
+}
+
+.btn-ghost:hover {
+  border-color: var(--ox-brand);
+}
+
+.btn-sm {
+  padding: 3px 12px;
+  font-size: 12px;
+}
+
+/* 输入框：白底 + 首页 10px 圆角，聚焦时品牌描边加一圈柔光 */
+.field {
+  padding: 9px 12px;
+  color: var(--ox-text);
+  background: var(--ox-card);
+  border: 1px solid var(--ox-border);
+  border-radius: var(--ox-radius-control);
+  font-family: inherit;
+}
+
+.field:focus {
+  outline: none;
+  border-color: var(--ox-brand);
+  box-shadow: 0 0 0 3px var(--vp-c-brand-soft);
+}

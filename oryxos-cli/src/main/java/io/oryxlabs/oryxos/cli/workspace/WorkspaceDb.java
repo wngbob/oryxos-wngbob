@@ -63,29 +63,31 @@ public final class WorkspaceDb implements AutoCloseable {
    * <p>按 {@code ;} 切分逐句执行，与 {@code LlmCallRepositoryTest} 的既有做法逐字一致——复用已被验证可行的方式， 不另发明一种脚本执行器。脚本内全是
    * {@code CREATE TABLE IF NOT EXISTS}，天然幂等，与 {@code init} 的幂等要求一致。
    *
-   * <p><b>前提</b>：脚本里不得出现含分号的字符串字面量或注释（切分会把它们切断）。该约束写在脚本自身的注释里。
+   * <p><b>它只建缺的表，不补已存在表缺的列</b>（{@code IF NOT EXISTS} 对已存在的表直接跳过）——补列是 {@link #applySchemaDrift()}
+   * 的职责，{@code init} 先补列、再跑本脚本。
    *
-   * <p><b>为什么要就地压制告警</b>：FindSecBugs 对「SQL 不是编译期常量」的形态一律报 {@code SQL_INJECTION_JDBC} / {@code
-   * SQL_NONCONSTANT_STRING_PASSED_TO_EXECUTE}，而本方法的 SQL 按 D8 的定义**只能**从 classpath 的 {@code
-   * db/schema.sql} 切出来——换成 {@code PreparedStatement} 一样会报（它同样按「入参非常量」判定），
-   * 换个写法绕不过去。注入面为零：脚本是本仓自己的资源文件，切出来的每句都是本仓自己写的 DDL。
+   * <p><b>前提</b>：脚本里不得出现含分号的字符串字面量或注释（切分会把它们切断）。该约束写在脚本自身的注释里。
    *
    * @throws IllegalStateException 脚本读不到或任一句执行失败
    */
-  @SuppressFBWarnings(
-      value = {"SQL_INJECTION_JDBC", "SQL_NONCONSTANT_STRING_PASSED_TO_EXECUTE"},
-      justification = "SQL 来自本仓自己的 classpath 资源 db/schema.sql，无外部输入")
   public void runSchemaScript() {
-    String script = readSchemaScript();
-    try (Statement statement = connection.createStatement()) {
-      for (String sql : script.split(STATEMENT_SEPARATOR)) {
-        if (!sql.isBlank()) {
-          statement.execute(sql);
-        }
-      }
-    } catch (SQLException e) {
-      throw new IllegalStateException("建表脚本执行失败：" + e.getMessage(), e);
-    }
+    executeSchemaScript(connection, readSchemaScript());
+  }
+
+  /**
+   * 把已存在表的结构补到 {@code db/schema.sql} 声明的形状（2026-10-20 用户批准）。
+   *
+   * <p><b>为什么需要它</b>：{@link #runSchemaScript()} 只建缺的表，旧工作区里「表在、第 16 节才加的列不在」这个缺口会让运行期 审计写入直接报
+   * {@code table llm_calls has no column named error_message}，而 {@code init} 的输出看不出任何异常。
+   *
+   * <p><b>只增不删、只补不改</b>：缺列用 {@code ALTER TABLE ADD COLUMN} 补；类型不一致只返回说明、不改；多出来的列不碰；缺表仍交给建表脚本。
+   * 具体判定与两处硬失败见 {@link SchemaDrift}。
+   *
+   * @return 面向用户的改动说明（含「补列」与「类型不一致」两类）；空列表表示无漂移
+   * @throws IllegalStateException 读取库结构或补列失败
+   */
+  public List<String> applySchemaDrift() {
+    return SchemaDrift.apply(connection, readSchemaScript());
   }
 
   /**
@@ -149,6 +151,32 @@ public final class WorkspaceDb implements AutoCloseable {
       connection.close();
     } catch (SQLException e) {
       throw new IllegalStateException("关闭工作区数据库失败：" + e.getMessage(), e);
+    }
+  }
+
+  /**
+   * 按 {@code ;} 切分并逐句执行建表脚本。
+   *
+   * <p><b>为什么单独抽出来</b>：{@code init} 在工作区库上执行它，{@link SchemaDrift} 又把同一份脚本跑进内存库读出「应有形状」—— 两处必须是同一个切分
+   * / 执行口径，否则「脚本说的」和「库里建的」会悄悄分叉。
+   *
+   * <p><b>为什么要就地压制告警</b>：FindSecBugs 对「SQL 不是编译期常量」的形态一律报 {@code SQL_INJECTION_JDBC} / {@code
+   * SQL_NONCONSTANT_STRING_PASSED_TO_EXECUTE}，而这里的 SQL 按 D8 的定义**只能**从 classpath 的 {@code
+   * db/schema.sql} 切出来——换成 {@code PreparedStatement}
+   * 一样会报（它同样按「入参非常量」判定），换个写法绕不过去。注入面为零：脚本是本仓自己的资源文件， 切出来的每句都是本仓自己写的 DDL。
+   */
+  @SuppressFBWarnings(
+      value = {"SQL_INJECTION_JDBC", "SQL_NONCONSTANT_STRING_PASSED_TO_EXECUTE"},
+      justification = "SQL 来自本仓自己的 classpath 资源 db/schema.sql，无外部输入")
+  static void executeSchemaScript(Connection connection, String script) {
+    try (Statement statement = connection.createStatement()) {
+      for (String sql : script.split(STATEMENT_SEPARATOR)) {
+        if (!sql.isBlank()) {
+          statement.execute(sql);
+        }
+      }
+    } catch (SQLException e) {
+      throw new IllegalStateException("建表脚本执行失败：" + e.getMessage(), e);
     }
   }
 

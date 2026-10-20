@@ -6,7 +6,7 @@
 
 - **三触发源统一入口**：CLI / Web Service（人推）与 AgentScheduler（钟推）汇入同一个 `AgentService`，ReActLoop 不感知消息来源
 - **引擎调度三能力**：`ReActLoop` 每轮经 `PromptBuilder` 组装上下文、经 `ProviderService` 调 LLM、经 `ToolExecutor`（先 Sandbox 白名单校验）执行工具，审计随调用落库
-- **存储下沉**：Session、审计、调度状态落 SQLite；Agent 目录、Bootstrap、`MEMORY.md` 落文件系统——可直接编辑、git 可跟踪
+- **存储下沉**：Session、审计、长期记忆（SQLite 档）与通知渠道落 SQLite；Agent 目录、Bootstrap、`MEMORY.md` 落文件系统——可直接编辑、git 可跟踪
 - **外部依赖全部在边界之外**：LLM API、外部 MCP server、企业 IM webhook，OryxOS 不绑定任何一家
 
 ## 技术栈
@@ -24,17 +24,17 @@
 
 | 模块 | 职责 |
 |------|------|
-| `oryxos-core` | ReActLoop、AgentService、PromptBuilder、Agent 加载与调度 |
+| `oryxos-core` | ReActLoop、AgentService、PromptBuilder、ToolExecutor、Agent 加载、AgentScheduler |
 | `oryxos-provider` | Provider 抽象与 LLM 协议适配（复用 Spring AI Alibaba） |
-| `oryxos-memory` | 会话记忆 + 长期记忆（`MEMORY.md`） |
-| `oryxos-tool` | 内置工具、Plugin Tool 三档扩展、ToolExecutor、Sandbox |
+| `oryxos-memory` | 会话记忆 + 长期记忆三档后端（Markdown / SQLite / Mem0） |
+| `oryxos-tool` | 15 个内置工具、Plugin Tool 三档扩展、ToolRegistry、MCP 客户端、Sandbox |
 | `oryxos-channel-cli` | CLI 交互渠道 |
-| `oryxos-web` | REST API / Web Service |
-| `oryxos-storage` | SQLite 持久化（Session、审计、调度状态） |
-| `oryxos-cli` | Picocli 命令行入口（独立运行，打印版本信息等） |
-| `oryxos-boot` | Spring Boot 主类与装配，产出 fat JAR（`java -jar` 入口） |
+| `oryxos-web` | 10 个 REST 端点、只读管理台、OpenAPI |
+| `oryxos-storage` | SQLite 持久化（Session、审计、记忆、通知渠道） |
+| `oryxos-cli` | Picocli 主入口（15 个子命令）与 `ConfigLoader` |
+| `oryxos-boot` | Spring Boot 装配与依赖聚合，产出 fat JAR（`oryxos.jar`，主类 `OryxOsCli`） |
 
-模块间当前不互相依赖，`oryxos-boot` 聚合全部 8 个模块完成装配；后续按 user story 逐个引入真实依赖。
+依赖方向按依赖倒置：`oryxos-boot` 聚合其余 8 个模块；`oryxos-cli` 依赖各能力模块；`oryxos-tool` / `oryxos-memory` 依赖 `oryxos-core` 实现其契约；`oryxos-core` **不反向依赖**任何能力模块。
 
 ## 安全与审计
 

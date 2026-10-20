@@ -18,6 +18,10 @@ import picocli.CommandLine.Command;
  * <p><b>幂等的落地方式是「先问再做」</b>：每个目录与文件先判存在，存在就只记一笔「已有」，一个字节都不写。
  * 不采用「先写再回滚」或「覆盖后比对」——那两种做法都会在失败时留下被改坏的文件，而 {@code init} 最常见的使用场景恰恰是「在已经跑了一阵的工作区里再跑一次」。
  *
+ * <p><b>数据库是唯一的例外（2026-10-20 用户批准）</b>：目录与文件一个字节都不覆盖，但已存在表缺的列会被 {@link
+ * WorkspaceDb#applySchemaDrift()} 补上——{@code schema.sql} 的 {@code CREATE TABLE IF NOT EXISTS}
+ * 进不了旧库，不补列会让运行期每次审计写入都失败。补列只增不删、只补不改，类型不一致只打出来给人看。
+ *
  * <p><b>不生成任何默认 Agent</b>（spec 仲裁 14）：{@code agents/} 建出来是空目录，{@code init} 之后直接 {@code chat} 会提示先
  * {@code profile create}。预置一个「demo」Agent 看着友好，实则让用户以为自己已经有了什么。
  *
@@ -147,7 +151,10 @@ public final class InitCommand implements Runnable {
     } catch (IOException e) {
       throw new IllegalStateException("创建工作区 " + root + " 失败：" + e.getMessage(), e);
     }
+    List<String> schemaChanges;
     try (WorkspaceDb database = WorkspaceDb.open(workspace.dbFile())) {
+      // 先补列、再建表：建表脚本里有依赖列的索引（memory_entries.scope），旧表缺列时先建索引会直接失败
+      schemaChanges = database.applySchemaDrift();
       database.runSchemaScript();
     }
     if (databaseExisted) {
@@ -155,7 +162,7 @@ public final class InitCommand implements Runnable {
     } else {
       created.add(label(root, workspace.dbFile()));
     }
-    report(root, created, existing);
+    report(root, created, existing, schemaChanges);
   }
 
   private static void createDirectory(
@@ -190,10 +197,20 @@ public final class InitCommand implements Runnable {
     return root.getFileName() + "/" + root.relativize(path).toString().replace('\\', '/');
   }
 
-  private static void report(Path root, List<String> created, List<String> existing) {
+  private static void report(
+      Path root, List<String> created, List<String> existing, List<String> schemaChanges) {
     System.out.println("工作区: " + root);
     reportSection("新建", created);
     reportSection("已有（未覆盖）", existing);
+    System.out.println();
+    System.out.println("数据库表结构:");
+    if (schemaChanges.isEmpty()) {
+      System.out.println("  与 db/schema.sql 一致（无需补列）");
+    } else {
+      for (String change : schemaChanges) {
+        System.out.println("  " + change);
+      }
+    }
     System.out.println();
     System.out.println(
         "下一步: `oryxos profile create <name>` 建一个 Agent，再 `oryxos chat --profile <name>` 开始对话");

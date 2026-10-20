@@ -119,18 +119,31 @@ public class CliAssemblyConfiguration {
   }
 
   /**
+   * Agent 目录装载器（第 26 节新增为独立 Bean）。
+   *
+   * <p><b>为什么单独成一个 Bean 而不是继续内联在 {@code profileRegistry} 里</b>：{@code GET /api/v1/profiles} 要
+   * 拿到**加载失败项**（{@code loadAllDetailed()} 的 failures），而 {@code ProfileRegistry} 只持有成功的那些。控制器与注册表
+   * 用同一个装载器实例，两侧读的是同一份目录、同一套校验口径，不会出现「注册表说没有、列表说有」的分歧。
+   *
+   * @param workspace 工作区，取它的 {@code agents/} 目录
+   * @return 装载器；无状态，{@code loadAllDetailed()} 每次都重新读盘
+   */
+  @Bean
+  public ProfileLoader profileLoader(Workspace workspace) {
+    return new ProfileLoader(workspace.agentsDir(), ProviderProperties.SUPPORTED_PROVIDERS);
+  }
+
+  /**
    * 启动时装载一次 Agent 索引，之后只读。
    *
    * <p>重命令每次执行都新建上下文，因此这个「启动时快照」等价于「本条命令开始时的快照」——改完 {@code AGENT.md} 下一条命令即生效， 不需要重启任何常驻进程。
    *
-   * @param workspace 工作区，取它的 {@code agents/} 目录
+   * @param profileLoader 上一步的装载器（第 26 节起复用同一实例，不再内联 {@code new}）
    * @return 按 Agent 名索引的 Profile 表
    */
   @Bean
-  public ProfileRegistry profileRegistry(Workspace workspace) {
-    ProfileLoader loader =
-        new ProfileLoader(workspace.agentsDir(), ProviderProperties.SUPPORTED_PROVIDERS);
-    return new ProfileRegistry(loader.loadAll());
+  public ProfileRegistry profileRegistry(ProfileLoader profileLoader) {
+    return new ProfileRegistry(profileLoader.loadAll());
   }
 
   /**

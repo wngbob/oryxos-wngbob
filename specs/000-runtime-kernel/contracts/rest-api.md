@@ -2,6 +2,14 @@
 
 **来源**: spec.md FR-060~064、US-5;`docs/TechnicalSolution.md` §7.2/§7.4。`oryxos serve` 启动,默认端口 8080,virtual thread。无认证(内网假设),CORS 全开放。
 
+> **2026-10-19 修订注(第 26 节交付时按实现对齐;原文一律不重写)**——本文件成稿于骨架期,真正落地时有五处字段 / 语义与实现不同。以下为**以实现为准**的差异清单,各段另有就地注:
+>
+> 1. 创建会话的渠道值是 **`"web"`**,不是 `"api"`——`api` 是「HTTP 入口」这个概念的旧名,落地时与 CLI 的 `cli` 对齐成渠道名。
+> 2. 会话里的用户字段名是 **`userId`**,不是 `user`(与 `SessionView` / `CreateSessionRequest` 一致)。
+> 3. 发消息与无状态调用的成功字段名是 **`reply`**,不是 `response`;请求体字段名是 **`content`**,不是 `message`(裁决 ⑪)。
+> 4. `/health` 的 `providers` 表达的是「**配置就绪 / 未配置**」,**不是「可达」**——健康检查不做真实网络探测(裁决 ⑤),取值仍是 `UP` / `DOWN`,语义已变。
+> 5. 错误文案补两条已定字面量:`session is archived: <id>`(400)与 `agent not found: <name>`(404,Agent 不存在或配置无效)。
+
 ## 统一信封与错误
 
 所有端点成功与错误共用同一信封:
@@ -28,11 +36,15 @@
 响应 `data`:`{ "sessionId", "profile", "channel": "api", "user", "status": "active", "createdAt" }`
 错误:404 profile 不存在或校验失败不可用。
 
+> 修订注(2026-10-19):实现里 channel 是 `"web"`,用户字段名是 `userId`(`CreateSessionRequest{profile, userId}`、`SessionView{..., channel, userId, ...}`);错误文案为 `agent not found: <name>`。
+
 ### `POST /api/v1/sessions/{id}/messages` — 发消息
 
 请求:`{ "message": "<≤32KB>" }`
 响应 `data`:`{ "sessionId", "response": "<Agent 最终响应文本>" }`(内部走完 ReAct 循环同步返回)
 错误:400 消息超长 / 会话已归档;404 会话不存在;503 Provider 故障;504 超时。
+
+> 修订注(2026-10-19):请求体字段是 `content`(`MessageRequest{content}`),成功字段是 `reply`(`MessageResponse{sessionId, reply}`);两条已定错误文案为 `message exceeds 32KB limit` 与 `session is archived: <id>`。
 
 ### `GET /api/v1/sessions/{id}` — 查历史
 
@@ -49,6 +61,8 @@
 请求:`{ "message": "<≤32KB>" }`
 响应 `data`:`{ "agent", "response" }`。
 语义:每次调用独立,不创建持久会话、不携带历史;LLM 与 Tool 审计照常落库(FR-071/072)。错误:404 / 503 / 504 同上。
+
+> 修订注(2026-10-19):请求体字段是 `content`(`InvokeRequest{content}`),成功字段是 `reply`(`InvokeResponse{agent, reply}`)。
 
 ## 信息查询(3)
 
@@ -69,6 +83,8 @@
 ### `GET /api/v1/health`
 
 响应 `data`:`{ "status": "UP", "db": "UP", "providers": {"deepseek": "UP", "kimi": "DOWN"} }`。任一 Provider 不可达不拉低总状态(只如实报告),db DOWN 则总状态 DOWN。
+
+> 修订注(2026-10-19):`providers` 的 `UP` / `DOWN` 表示的是「**配置就绪 / 未配置**」,**不是「可达 / 不可达」**——健康检查只读配置、不发真实网络探测(裁决 ⑤,健康检查不该有副作用)。故上句「任一 Provider 不可达不拉低总状态」在实现里的同义表述是「任一 Provider 未配置不拉低总状态」。`status` 仍由 db 探测结果决定。
 
 ### `GET /api/v1/info`
 

@@ -1,0 +1,22 @@
+# OryxOS 启动配置（bin/start.sh 读取，bin/stop.sh 不读）
+#
+# 用法：
+#   cp bin/config.yaml.example bin/config.yaml
+#   vi bin/config.yaml          # 填入 deepseek.api-key
+#   bin/start.sh                # 后台启动；bin/stop.sh 停止
+#
+# bin/config.yaml 已在 .gitignore 里（凭证不入库），本模板可以入库。
+# 只支持「两级键 + 标量值」这个 YAML 子集：缩进表示归属，值两侧引号可有可无，
+# 行内 # 注释在引号外生效。没有列表、多行字符串等语法。
+
+server:
+  # HTTP 端口。REST 接口 /api/v1、管理台 /admin/、接口文档 /swagger-ui
+  # 都由同一个进程、同一个端口提供（管理台没有独立后端）。
+  port: 8080
+
+deepseek:
+  # 必填：DeepSeek API key。
+  # start.sh 把它以 DEEPSEEK_API_KEY 环境变量传给进程——application.yaml 里
+  # 写的是 ${DEEPSEEK_API_KEY} 占位，明文凭证不落仓库里的任何配置文件。
+  # 这里留空时，start.sh 会退回到当前 shell 已设置的 DEEPSEEK_API_KEY。
+  api-key: ""

@@ -25,6 +25,12 @@ import org.springframework.ai.chat.messages.AssistantMessage;
  */
 public final class Session {
 
+  /** 活跃态：会话还能继续收发消息（第 26 节起写进 {@code sessions.status}）。 */
+  public static final String STATUS_ACTIVE = "active";
+
+  /** 归档态：会话仍可查询历史，但 MUST NOT 再接收消息（第 26 节）。 */
+  public static final String STATUS_ARCHIVED = "archived";
+
   private final String id;
   private final String channel;
   private final String userId;
@@ -32,28 +38,40 @@ public final class Session {
   private final List<SessionMessage> messages = new ArrayList<>();
   private final Instant createdAt;
   private Instant lastActiveAt;
+  private final String status;
+  private final Instant archivedAt;
 
-  private Session(String id, String channel, String userId, String profileName, Instant createdAt) {
+  private Session(
+      String id,
+      String channel,
+      String userId,
+      String profileName,
+      Instant createdAt,
+      String status,
+      Instant archivedAt) {
     this.id = Objects.requireNonNull(id, "id");
     this.channel = Objects.requireNonNull(channel, "channel");
     this.userId = Objects.requireNonNull(userId, "userId");
     this.profileName = Objects.requireNonNull(profileName, "profileName");
     this.createdAt = Objects.requireNonNull(createdAt, "createdAt");
     this.lastActiveAt = createdAt;
+    this.status = status;
+    this.archivedAt = archivedAt;
   }
 
   /**
    * 新建一个会话。
    *
    * @param id 会话标识；由 {@code SessionId.of(channel, userId, profileName)} 拼接（第 18 节）
-   * @param channel 接入渠道，如 {@code cli} / {@code api} / {@code scheduler}
+   * @param channel 接入渠道，如 {@code cli} / {@code web} / {@code scheduler} （修订注，2026-10-19：原写 {@code
+   *     api}，第 26 节裁决渠道字面量为 {@code web}）
    * @param userId 用户标识；CLI 固定 {@code local}
    * @param profileName 所属 Agent 名；{@code AgentService} 靠它从 {@code ProfileRegistry} 取
    *     Profile（FR-009）
    * @return 空的会话
    */
   public static Session create(String id, String channel, String userId, String profileName) {
-    return new Session(id, channel, userId, profileName, Instant.now());
+    return new Session(id, channel, userId, profileName, Instant.now(), STATUS_ACTIVE, null);
   }
 
   /**
@@ -71,6 +89,8 @@ public final class Session {
    * @param messages 已带时间戳的历史消息，顺序即事实顺序
    * @param createdAt 原创建时间
    * @param lastActiveAt 原最后活跃时间
+   * @param status 归档态；{@code null} 归一化成 {@link #STATUS_ACTIVE}（老行的防御）
+   * @param archivedAt 归档时刻；未归档为 {@code null}
    * @return 恢复出来的会话
    */
   static Session restore(
@@ -80,8 +100,18 @@ public final class Session {
       String profileName,
       List<SessionMessage> messages,
       Instant createdAt,
-      Instant lastActiveAt) {
-    Session session = new Session(id, channel, userId, profileName, createdAt);
+      Instant lastActiveAt,
+      String status,
+      Instant archivedAt) {
+    Session session =
+        new Session(
+            id,
+            channel,
+            userId,
+            profileName,
+            createdAt,
+            status == null ? STATUS_ACTIVE : status,
+            archivedAt);
     session.messages.addAll(messages);
     session.lastActiveAt = Objects.requireNonNull(lastActiveAt, "lastActiveAt");
     return session;
@@ -134,6 +164,20 @@ public final class Session {
    */
   public Instant lastActiveAt() {
     return lastActiveAt;
+  }
+
+  /**
+   * @return 归档态：{@link #STATUS_ACTIVE} 或 {@link #STATUS_ARCHIVED}
+   */
+  public String status() {
+    return status;
+  }
+
+  /**
+   * @return 归档时刻；未归档为 {@code null}
+   */
+  public Instant archivedAt() {
+    return archivedAt;
   }
 
   /**

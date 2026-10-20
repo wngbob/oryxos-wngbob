@@ -73,8 +73,8 @@ const zh = {
       { name: '对接 LLM', desc: 'Provider 抽象统一对接主流大模型，运行时切换无锁定，支持本地推理' },
       { name: 'ReAct 循环', desc: '自实现推理引擎：思考 → 调工具 → 看结果 → 再决定，行为完全可控' },
       { name: 'Memory 记忆', desc: '会话 + 长期两层记忆，跨对话记住用户偏好、项目背景、关键决策' },
-      { name: 'Tool 工具体系', desc: '内置 9 个工具，零代码到重代码三档扩展，白名单沙箱强制隔离' },
-      { name: 'Web Service', desc: '全部能力通过 REST API 对外暴露，任何能发 HTTP 的语言都能接入' }
+      { name: 'Tool 工具体系', desc: '内置 15 个工具，零代码到重代码三档扩展，白名单沙箱强制隔离' },
+      { name: 'Web Service', desc: '10 个 REST 端点统一暴露全部能力；同一端口提供只读管理台与 OpenAPI 文档' }
     ]
   },
   arch: {
@@ -83,7 +83,7 @@ const zh = {
     bullets: [
       ['三触发源统一入口', 'CLI / Web Service（人推）与 AgentScheduler（钟推）汇入同一个 AgentService'],
       ['引擎调度三能力', 'ReActLoop 每轮经 PromptBuilder 组装上下文、经 ProviderService 调 LLM、经 ToolExecutor（先 Sandbox 校验）执行工具'],
-      ['存储下沉', 'Session、审计、调度状态落 SQLite；Agent 目录、MEMORY.md 落文件系统，git 可跟踪'],
+      ['存储下沉', 'Session、审计与长期记忆（SQLite 档）落 SQLite；Agent 目录、MEMORY.md 落文件系统，git 可跟踪'],
       ['外部依赖在边界之外', 'LLM API、外部 MCP server、企业 IM webhook，OryxOS 不绑定任何一家']
     ],
     link: '查看完整架构说明 →'
@@ -104,9 +104,9 @@ const zh = {
   start: {
     label: 'QUICK START',
     title: '快速开始',
-    note: '⚠️ 项目处于开发早期：设计文档已定稿，代码按路线图推进中，以下命令为即将提供的形态预览。',
-    comments: ['# 环境要求：JDK 21+，Maven 3.8+', '# 构建', '# 初始化工作区', '# 创建一个 Agent', '# 开始对话，或 oryxos serve 启动 REST API'],
-    cmds: ['mvn clean package', 'oryxos init', 'oryxos profile create my-assistant', 'oryxos chat'],
+    note: '✅ 运行时内核已跑通：五大核心能力已交付，以下命令均已在真实构建上验证；验收 Demo 与跨节串联验收进行中。',
+    comments: ['# 环境要求：JDK 21+、Maven 3.8+', '# 构建（必须带 clean）', '# 初始化工作区（幂等，含建表）', '# 创建一个 Agent', '# 常驻：REST /api/v1 + 管理台 /admin/ + 文档 /swagger-ui'],
+    cmds: ['./mvnw clean package -Ddependency-check.skip=true', 'java -jar oryxos-boot/target/oryxos.jar init', 'java -jar oryxos-boot/target/oryxos.jar profile create my-assistant', 'java -jar oryxos-boot/target/oryxos.jar serve'],
     agentTitle: '一个目录 = 一个 Agent',
     agentDesc: '在 .oryxos/agents/daily-weather/AGENT.md 里写下配置，不写一行代码，到点自动运行，每次调用都有审计记录。'
   },
@@ -115,7 +115,7 @@ const zh = {
     title: '路线图',
     motto: '慢就是快，克制且聚焦。先把单机的运行时内核做扎实，再逐步生长出分布式能力。',
     phases: [
-      { tag: '阶段一 · 当前', name: '单机运行时内核', desc: '五大核心能力跑通：配置即 Agent、多 Agent 并存、REST API 接入、对接 MCP' },
+      { tag: '阶段一 · 当前', name: '单机运行时内核', desc: '五大核心能力已跑通：配置即 Agent、多 Agent 并存、REST API 与只读管理台、对接 MCP；正在收尾验收 Demo' },
       { tag: '阶段二 · 规划', name: '底座分布式', desc: '节点无状态化、状态外置、多副本部署，支撑更大规模与高可用' },
       { tag: '阶段三 · 愿景', name: '跨节点 Agent 协作', desc: '引入 Agent 通信底座，对接 A2A，跨节点发现、委托、可靠异步协同' }
     ],
@@ -200,8 +200,8 @@ const en = {
       { name: 'LLM Integration', desc: 'Provider abstraction over mainstream LLMs, switchable at runtime, local inference supported' },
       { name: 'ReAct Loop', desc: 'Self-implemented reasoning engine: think → act → observe → decide. Fully controllable' },
       { name: 'Memory', desc: 'Session + long-term memory that keeps user preferences and project context across conversations' },
-      { name: 'Tool System', desc: '9 built-in tools, three extension tiers from zero-code to full-code, whitelist sandbox' },
-      { name: 'Web Service', desc: 'Every capability exposed via REST API — any language that speaks HTTP can integrate' }
+      { name: 'Tool System', desc: '15 built-in tools, three extension tiers from zero-code to full-code, whitelist sandbox' },
+      { name: 'Web Service', desc: '10 REST endpoints expose every capability; a read-only admin console and OpenAPI docs on the same port' }
     ]
   },
   arch: {
@@ -210,7 +210,7 @@ const en = {
     bullets: [
       ['One entry for three triggers', 'CLI / Web Service (human-pushed) and AgentScheduler (clock-pushed) converge on the same AgentService'],
       ['The engine orchestrates three capabilities', 'Each ReActLoop turn builds context via PromptBuilder, calls LLM via ProviderService, executes tools via ToolExecutor (sandbox-checked first)'],
-      ['Storage sinks down', 'Sessions, audit and schedules live in SQLite; Agent directories and MEMORY.md live in the file system, git-trackable'],
+      ['Storage sinks down', 'Sessions, audit and long-term memory (SQLite backend) live in SQLite; Agent directories and MEMORY.md live in the file system, git-trackable'],
       ['Dependencies stay outside the boundary', 'LLM APIs, external MCP servers and IM webhooks — OryxOS binds to none of them']
     ],
     link: 'Read the full architecture →'
@@ -231,9 +231,9 @@ const en = {
   start: {
     label: 'QUICK START',
     title: 'Quick Start',
-    note: '⚠️ Early stage: the design is finalized and code is in progress. The commands below preview the upcoming form.',
-    comments: ['# Requires JDK 21+ and Maven 3.8+', '# Build', '# Initialize the workspace', '# Create an Agent', '# Start chatting, or run oryxos serve for the REST API'],
-    cmds: ['mvn clean package', 'oryxos init', 'oryxos profile create my-assistant', 'oryxos chat'],
+    note: '✅ Runtime kernel is up: all five core capabilities are delivered and the commands below are verified on real builds. Acceptance demos and cross-section integration checks are in progress.',
+    comments: ['# Requires JDK 21+ and Maven 3.8+', '# Build (always with clean)', '# Initialize the workspace (idempotent, creates tables)', '# Create an Agent', '# Serve: REST /api/v1 + admin /admin/ + docs /swagger-ui'],
+    cmds: ['./mvnw clean package -Ddependency-check.skip=true', 'java -jar oryxos-boot/target/oryxos.jar init', 'java -jar oryxos-boot/target/oryxos.jar profile create my-assistant', 'java -jar oryxos-boot/target/oryxos.jar serve'],
     agentTitle: 'One directory = one Agent',
     agentDesc: 'Write the config in .oryxos/agents/daily-weather/AGENT.md — no code, runs on schedule, every call audited.'
   },
@@ -242,7 +242,7 @@ const en = {
     title: 'Roadmap',
     motto: 'Slow is fast: restrained and focused. Nail the single-node runtime kernel first, then grow distributed capabilities.',
     phases: [
-      { tag: 'Phase 1 · Now', name: 'Single-node Runtime Kernel', desc: 'Five core capabilities: configuration-as-Agent, multi-Agent coexistence, REST API, MCP integration' },
+      { tag: 'Phase 1 · Now', name: 'Single-node Runtime Kernel', desc: 'Five core capabilities are up: configuration-as-Agent, multi-Agent coexistence, REST API plus read-only admin console, MCP integration; wrapping up acceptance demos' },
       { tag: 'Phase 2 · Planned', name: 'Distributed Harness', desc: 'Stateless nodes, external state, multi-replica deployment for scale and high availability' },
       { tag: 'Phase 3 · Vision', name: 'Cross-node Agent Collaboration', desc: 'Agent communication fabric over A2A: cross-node discovery, delegation, reliable async coordination' }
     ],

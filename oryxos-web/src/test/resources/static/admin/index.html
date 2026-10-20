@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>SPA fallback test fixture</title>
+  </head>
+  <body>
+    <!--
+      这是 WebConfigTest 的测试夹具，不是管理台本体。
+
+      为什么需要它：`-Dfrontend.skip=true` 时 src/main/resources/static/admin/ 是空的，
+      而 SPA 回落的判据是「未命中的 /admin/** 请求能拿到 index.html」——没有一份 index.html
+      在 classpath 上，回落路径与 404 路径就无法区分。夹具只在 test classpath 上，
+      永不进发行物；真产物由 frontend-maven-plugin 构建后写进主资源目录。
+    -->
+    <div id="fixture">spa-fallback-fixture</div>
+  </body>
+</html>

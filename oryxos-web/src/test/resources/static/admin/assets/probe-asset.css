@@ -1,0 +1,4 @@
+/* WebConfigTest 的静态资源夹具：只用来验 /admin/assets/** 的长缓存头。 */
+.probe-asset {
+  --probe-asset-fixture: 1;
+}

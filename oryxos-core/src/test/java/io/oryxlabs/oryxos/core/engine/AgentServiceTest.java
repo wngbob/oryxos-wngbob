@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -13,6 +14,7 @@ import io.oryxlabs.oryxos.core.profile.Profile;
 import io.oryxlabs.oryxos.core.profile.ProfileRegistry;
 import io.oryxlabs.oryxos.core.session.Session;
 import io.oryxlabs.oryxos.core.session.SessionService;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -102,6 +104,48 @@ class AgentServiceTest {
     agentService.process(session, "今天天气怎么样？");
 
     verify(sessionService).save(session);
+  }
+
+  @Test
+  @DisplayName("无状态调用：两次调用各自拿到一个全新的空会话，互相看不见（第 26 节 FR-002 / 裁决 ⑫）")
+  void processStateless_isolatesEveryCall() {
+    List<Session> seen = new ArrayList<>();
+    when(reActLoop.run(any(), anyString(), any()))
+        .thenAnswer(
+            invocation -> {
+              seen.add(invocation.getArgument(0, Session.class));
+              return "第一次答复";
+            });
+
+    agentService.processStateless("demo", "帮我算一下 3 的 7 次方");
+    agentService.processStateless("demo", "再算一次");
+
+    assertThat(seen).hasSize(2);
+    assertThat(seen.get(0).id()).isNotEqualTo(seen.get(1).id());
+    assertThat(seen).allSatisfy(session -> assertThat(session.messages()).isEmpty());
+  }
+
+  @Test
+  @DisplayName("无状态调用不落库：不调用 sessionService.save（FR-002）")
+  void processStateless_neverPersistsSession() {
+    when(reActLoop.run(any(), anyString(), any())).thenReturn("算好了");
+
+    agentService.processStateless("demo", "帮我算一下 3 的 7 次方");
+
+    verify(sessionService, never()).save(any());
+  }
+
+  @Test
+  @DisplayName("无状态调用同样清上下文：正常与异常路径都不留 ProfileContext")
+  void processStateless_clearsProfileContext() {
+    when(reActLoop.run(any(), anyString(), any())).thenReturn("算好了");
+    agentService.processStateless("demo", "帮我算一下");
+    assertNull(ProfileContext.current());
+
+    when(reActLoop.run(any(), anyString(), any()))
+        .thenThrow(new IllegalStateException("Provider 侧故障"));
+    assertThrows(IllegalStateException.class, () -> agentService.processStateless("demo", "再来一次"));
+    assertNull(ProfileContext.current());
   }
 
   @Test

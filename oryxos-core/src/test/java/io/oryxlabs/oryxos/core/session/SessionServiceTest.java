@@ -50,6 +50,13 @@ class SessionServiceTest {
               rows.put(entity.getSessionId(), entity);
               return entity;
             });
+    // 第 26 节新增的派生查询：数的是替身背后那几行的真实状态，而不是写死一个常量
+    when(repository.countByStatus(anyString()))
+        .thenAnswer(
+            call -> {
+              String status = call.getArgument(0, String.class);
+              return rows.values().stream().filter(row -> status.equals(row.getStatus())).count();
+            });
     sessionService = new JpaSessionService(repository);
   }
 
@@ -213,5 +220,42 @@ class SessionServiceTest {
 
     assertThat(rows.get(session.id()).getStatus()).isEqualTo("archived");
     assertThat(rows.get(session.id()).getArchivedAt()).isEqualTo(archivedAt);
+  }
+
+  @Test
+  @DisplayName("归档幂等：第二次归档仍返回 true，且 archivedAt 保持首次归档的时刻（FR-021）")
+  void archive_isIdempotent() {
+    Session session = sessionService.getOrCreate("web", "alice", "daily-weather");
+    sessionService.save(session);
+
+    assertThat(sessionService.archive(session.id())).isTrue();
+    LocalDateTime firstArchivedAt = rows.get(session.id()).getArchivedAt();
+    assertThat(firstArchivedAt).isNotNull();
+
+    assertThat(sessionService.archive(session.id())).isTrue();
+    assertThat(rows.get(session.id()).getArchivedAt())
+        .as("重复 DELETE 不该把归档时刻改成「现在」")
+        .isEqualTo(firstArchivedAt);
+  }
+
+  @Test
+  @DisplayName("归档从未存在的会话返回 false（与「重复归档」是两回事，调用方据此报 404）")
+  void archive_unknownSessionReturnsFalse() {
+    assertThat(sessionService.archive("web:alice:nobody")).isFalse();
+  }
+
+  @Test
+  @DisplayName("countActive 数的是 active 行：归档一条即少一条")
+  void countActive_dropsAfterArchive() {
+    Session kept = sessionService.getOrCreate("web", "alice", "daily-weather");
+    Session archived = sessionService.getOrCreate("web", "bob", "daily-weather");
+    sessionService.save(kept);
+    sessionService.save(archived);
+    assertThat(sessionService.countActive()).isEqualTo(2);
+
+    sessionService.archive(archived.id());
+
+    assertThat(sessionService.countActive()).isEqualTo(1);
+    assertThat(rows.get(kept.id()).getStatus()).isEqualTo("active");
   }
 }

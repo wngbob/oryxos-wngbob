@@ -2,6 +2,7 @@ package io.oryxlabs.oryxos.memory;
 
 import io.oryxlabs.oryxos.core.profile.Profile;
 import io.oryxlabs.oryxos.memory.store.LongTermMemoryStore;
+import io.oryxlabs.oryxos.memory.store.MemoryPartition;
 import io.oryxlabs.oryxos.memory.store.MemoryScope;
 import java.util.List;
 import java.util.Objects;
@@ -64,6 +65,12 @@ public class MemoryServiceImpl implements MemoryService {
       default:
         throw new IllegalStateException("未知的检索能力：" + store.capabilities());
     }
+  }
+
+  @Override
+  public MemoryPartition partition() {
+    // 与 longTermMemory 一样不缓存：管理台看到的必须是「此刻」的记忆
+    return store.partition();
   }
 
   /**

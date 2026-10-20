@@ -6,7 +6,7 @@
 
 - **One entry for three triggers**: CLI / Web Service (human-pushed) and AgentScheduler (clock-pushed) converge on the same `AgentService`; the ReActLoop is agnostic to the message source
 - **The engine orchestrates three capabilities**: each `ReActLoop` turn builds context via `PromptBuilder`, calls the LLM via `ProviderService`, and executes tools via `ToolExecutor` (after Sandbox whitelist checks), with audit persisted alongside each call
-- **Storage sinks down**: sessions, audit and schedule state live in SQLite; Agent directories, bootstrap files and `MEMORY.md` live in the file system — directly editable and git-trackable
+- **Storage sinks down**: sessions, audit, long-term memory (SQLite backend) and notification channels live in SQLite; Agent directories, bootstrap files and `MEMORY.md` live in the file system — directly editable and git-trackable
 - **All external dependencies stay outside the boundary**: LLM APIs, external MCP servers and enterprise IM webhooks — OryxOS binds to none of them
 
 ## Tech Stack
@@ -24,17 +24,17 @@
 
 | Module | Responsibility |
 |--------|----------------|
-| `oryxos-core` | ReActLoop, AgentService, PromptBuilder, Agent loading & scheduling |
+| `oryxos-core` | ReActLoop, AgentService, PromptBuilder, ToolExecutor, Agent loading, AgentScheduler |
 | `oryxos-provider` | Provider abstraction and LLM protocol adaptation (reusing Spring AI Alibaba) |
-| `oryxos-memory` | Session memory + long-term memory (`MEMORY.md`) |
-| `oryxos-tool` | Built-in tools, Plugin Tool three-tier extension, ToolExecutor, Sandbox |
+| `oryxos-memory` | Session memory + long-term memory with three backends (Markdown / SQLite / Mem0) |
+| `oryxos-tool` | 15 built-in tools, Plugin Tool three-tier extension, ToolRegistry, MCP client, Sandbox |
 | `oryxos-channel-cli` | CLI interactive channel |
-| `oryxos-web` | REST API / Web Service |
-| `oryxos-storage` | SQLite persistence (sessions, audit, schedule state) |
-| `oryxos-cli` | Picocli command-line entry (runs independently, prints version info, etc.) |
-| `oryxos-boot` | Spring Boot main class and assembly, producing the fat JAR (`java -jar` entry) |
+| `oryxos-web` | 10 REST endpoints, read-only admin console, OpenAPI |
+| `oryxos-storage` | SQLite persistence (sessions, audit, memory, notification channels) |
+| `oryxos-cli` | Picocli main entry (15 subcommands) and `ConfigLoader` |
+| `oryxos-boot` | Spring Boot assembly and dependency aggregation, producing the fat JAR (`oryxos.jar`, main class `OryxOsCli`) |
 
-Modules currently have no inter-dependencies; `oryxos-boot` aggregates all 8 for assembly. Real dependencies are introduced story by story.
+Dependencies follow inversion: `oryxos-boot` aggregates the other 8 modules; `oryxos-cli` depends on the capability modules; `oryxos-tool` / `oryxos-memory` depend on `oryxos-core` to implement its contracts; `oryxos-core` **never depends on** any capability module.
 
 ## Security & Audit
 

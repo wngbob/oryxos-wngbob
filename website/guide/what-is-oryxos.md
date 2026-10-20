@@ -62,5 +62,5 @@
 | **对接 LLM** | Provider 抽象统一对接主流大模型（DeepSeek、通义、Kimi、智谱、混元、豆包、Anthropic、OpenAI…），Agent 不感知厂商，运行时切换无锁定，支持本地推理（Ollama、vLLM） |
 | **ReAct 循环** | Agent 的推理引擎：LLM 思考 → 调工具 → 看结果 → 再决定，直到给出最终响应；自实现、行为完全可控 |
 | **Memory 记忆** | 会话 + 长期两层记忆，跨对话记住用户偏好、项目背景、关键决策 |
-| **Tool 工具体系** | 内置文件 / Shell / HTTP / 记忆 / 通知 9 个工具，Plugin Tool 三档扩展 |
-| **Web Service** | 全部能力通过 REST API 对外暴露，任何能发 HTTP 的语言都能接入 |
+| **Tool 工具体系** | 内置 **15 个**工具（文件读写编辑、Shell、HTTP、网页搜索与抓取、通知推送、交互提问、长期记忆），Plugin Tool 三档扩展，白名单沙箱强制隔离 |
+| **Web Service** | 10 个 REST 端点统一封装全部能力，任何能发 HTTP 的语言都能接入；同一端口提供只读管理台与 OpenAPI 文档 |

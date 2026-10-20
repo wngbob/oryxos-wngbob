@@ -17,7 +17,9 @@ import java.util.Optional;
  * <p><b>不加 {@code @Component}</b>：由装配点以 {@code @Bean} 声明，「谁装配、装配成什么」只在一处可见（第 26 节 需要时复用同一个
  * {@code @Bean} 方法，不得复制一份）。
  *
- * <p><b>本节不做</b>：归档（{@code status} / {@code archived_at} 的第二态归第 26 节）、按条拆表。
+ * <p><b>本节不做</b>：归档（{@code status} / {@code archived_at} 的第二态归第 26 节）、按条拆表。 （修订注，2026-10-19，第 26
+ * 节：归档已由 {@link #archive(String)} 补齐——这是第 18 节预先留好的位置，{@link #save(Session)} 的更新列集合当时就已收窄到 {@code
+ * messages_json} + {@code last_active_at}，故归档态不会被下一次写入复活。）
  *
  * <p><b>抑制 P3C 的 {@code ServiceOrDaoClassShouldEndWithImplRule}</b>：该规则要求 Service 接口的实现类以 {@code
  * Impl} 结尾。本类的命名口径是<b>技术前缀</b>而非 {@code Impl} 后缀——与第 17 节 {@code JpaLlmCallRecorder} 一致，类名本身已经
@@ -26,9 +28,6 @@ import java.util.Optional;
  */
 @SuppressWarnings("PMD.ServiceOrDaoClassShouldEndWithImplRule")
 public class JpaSessionService implements SessionService {
-
-  /** 新建会话的初始状态。归档是第 26 节的行为。 */
-  private static final String STATUS_ACTIVE = "active";
 
   private final SessionRepository repository;
 
@@ -70,6 +69,26 @@ public class JpaSessionService implements SessionService {
     repository.save(entity);
   }
 
+  @Override
+  public boolean archive(String sessionId) {
+    SessionEntity entity = repository.findById(sessionId).orElse(null);
+    if (entity == null) {
+      return false;
+    }
+    // 已归档就一行都不写：重复 DELETE 必须返回首次那个 archivedAt，而不是把时刻改成「现在」
+    if (!Session.STATUS_ARCHIVED.equals(entity.getStatus())) {
+      entity.setStatus(Session.STATUS_ARCHIVED);
+      entity.setArchivedAt(LocalDateTime.now());
+      repository.save(entity);
+    }
+    return true;
+  }
+
+  @Override
+  public long countActive() {
+    return repository.countByStatus(Session.STATUS_ACTIVE);
+  }
+
   private static SessionEntity newRow(Session session, String messagesJson) {
     SessionEntity entity = new SessionEntity();
     entity.setSessionId(session.id());
@@ -77,7 +96,7 @@ public class JpaSessionService implements SessionService {
     entity.setChannel(session.channel());
     entity.setUserId(session.userId());
     entity.setMessagesJson(messagesJson);
-    entity.setStatus(STATUS_ACTIVE);
+    entity.setStatus(Session.STATUS_ACTIVE);
     entity.setCreatedAt(toLocalDateTime(session.createdAt()));
     entity.setLastActiveAt(toLocalDateTime(session.lastActiveAt()));
     entity.setArchivedAt(null);
@@ -92,7 +111,9 @@ public class JpaSessionService implements SessionService {
         entity.getProfileName(),
         MessageJson.fromJson(entity.getMessagesJson()),
         toInstant(entity.getCreatedAt()),
-        toInstant(entity.getLastActiveAt()));
+        toInstant(entity.getLastActiveAt()),
+        entity.getStatus(),
+        toInstant(entity.getArchivedAt()));
   }
 
   /**
@@ -104,6 +125,7 @@ public class JpaSessionService implements SessionService {
   }
 
   private static Instant toInstant(LocalDateTime localDateTime) {
-    return localDateTime.atZone(ZoneId.systemDefault()).toInstant();
+    // archived_at 可空：未归档的行这一列就是 NULL，不是「没有时间戳」这种异常
+    return localDateTime == null ? null : localDateTime.atZone(ZoneId.systemDefault()).toInstant();
   }
 }

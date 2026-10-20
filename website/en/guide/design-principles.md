@@ -20,7 +20,7 @@ MCP for tools, A2A for Agent collaboration, open formats for skills (borrowing t
 
 ## Stateless instances, external state
 
-Instances hold no state: sessions, audit and schedule state live in SQLite; Agent directories and memory live in the file system. This is the prerequisite for scaling smoothly from single-node to distributed — the road is paved from day one.
+Instances hold no state: sessions, audit and long-term memory (SQLite backend) live in SQLite; Agent directories and memory live in the file system, and scheduled tasks are defined in `AGENT.md`. This is the prerequisite for scaling smoothly from single-node to distributed — the road is paved from day one.
 
 ## Security is the foundation, not a patch
 

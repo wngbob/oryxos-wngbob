@@ -28,8 +28,11 @@
         </dependency>
 
         <!--
-          六个能力模块：CliAssemblyConfiguration 显式装配它们，命令类从上下文取 Bean。
-          MUST NOT 加 oryxos-web —— 本节不起 Web 容器（仲裁 15）。
+          七个能力模块：CliAssemblyConfiguration 显式装配它们，命令类从上下文取 Bean。
+          （修订注，2026-10-19，第 26 节）第 18 节这里写着「MUST NOT 加 oryxos-web —— 本节不起 Web 容器（仲裁 15）」，
+          那是当时节内范围的表述，原文不重写。第 26 节起 `serve` 要起 SERVLET 容器并扫到
+          io.oryxlabs.oryxos.web 下的 @RestController，故补上这条依赖边；`chat` / `gateway` 仍显式用
+          WebApplicationType.NONE，不会因此起端口。
         -->
         <dependency>
             <groupId>io.oryxlabs</groupId>
@@ -38,6 +41,10 @@
         <dependency>
             <groupId>io.oryxlabs</groupId>
             <artifactId>oryxos-provider</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.oryxlabs</groupId>
+            <artifactId>oryxos-web</artifactId>
         </dependency>
         <dependency>
             <groupId>io.oryxlabs</groupId>

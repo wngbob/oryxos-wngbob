@@ -75,25 +75,35 @@ public class MarkdownMemoryStore implements LongTermMemoryStore {
 
   @Override
   public String load() {
-    Sections sections = readSections();
-    if (sections.core().isEmpty() && sections.archive().isEmpty()) {
+    MemoryPartition partition = partition();
+    if (partition.core().isEmpty() && partition.archival().isEmpty()) {
       // 空记忆整条不注入 prompt——MUST NOT 让一段只有标题的空壳占上下文（FR-014 / SC-007）
       return "";
     }
-    String archive = String.join("\n", sections.archive());
-    if (archive.length() > MAX_ARCHIVE_CHARS) {
-      archive = archive.substring(archive.length() - MAX_ARCHIVE_CHARS);
-    }
     StringBuilder text = new StringBuilder();
     text.append(CORE_HEADER).append('\n');
-    if (!sections.core().isEmpty()) {
-      text.append(String.join("\n", sections.core())).append('\n');
+    if (!partition.core().isEmpty()) {
+      text.append(partition.core()).append('\n');
     }
     text.append('\n').append(ARCHIVE_HEADER).append('\n');
-    if (!archive.isEmpty()) {
-      text.append(archive).append('\n');
+    if (!partition.archival().isEmpty()) {
+      text.append(partition.archival()).append('\n');
     }
     return text.toString().strip();
+  }
+
+  @Override
+  public MemoryPartition partition() {
+    // load() 与 /api/v1/memory 共用这一处：截断口径只写一遍，两个出口的内容不可能对不上
+    Sections sections = readSections();
+    String core = String.join("\n", sections.core());
+    String archive = String.join("\n", sections.archive());
+    boolean truncated = archive.length() > MAX_ARCHIVE_CHARS;
+    if (truncated) {
+      // 只裁归档段的尾部；核心段的字符串根本没进这段代码
+      archive = archive.substring(archive.length() - MAX_ARCHIVE_CHARS);
+    }
+    return new MemoryPartition(core, archive, truncated);
   }
 
   @Override

@@ -133,6 +133,23 @@ public final class Mem0MemoryStore implements LongTermMemoryStore {
 
   @Override
   public String load() {
+    MemoryPartition partition = partition();
+    if (partition.core().isEmpty() && partition.archival().isEmpty()) {
+      return "";
+    }
+    StringBuilder text = new StringBuilder("## 核心记忆\n");
+    if (!partition.core().isEmpty()) {
+      text.append(partition.core()).append('\n');
+    }
+    text.append("\n## 归档记忆\n");
+    if (!partition.archival().isEmpty()) {
+      text.append(partition.archival()).append('\n');
+    }
+    return text.toString().strip();
+  }
+
+  @Override
+  public MemoryPartition partition() {
     byte[] body =
         call(
             () ->
@@ -147,18 +164,7 @@ public final class Mem0MemoryStore implements LongTermMemoryStore {
     // 核心区全量、归档区不截断：截断交给 Mem0 自己的作用域机制，本进程不做第二道裁剪
     List<String> core = memoriesOf(body, SCOPE_CORE);
     List<String> archive = memoriesOf(body, SCOPE_ARCHIVAL);
-    if (core.isEmpty() && archive.isEmpty()) {
-      return "";
-    }
-    StringBuilder text = new StringBuilder("## 核心记忆\n");
-    if (!core.isEmpty()) {
-      text.append(String.join("\n", core)).append('\n');
-    }
-    text.append("\n## 归档记忆\n");
-    if (!archive.isEmpty()) {
-      text.append(String.join("\n", archive)).append('\n');
-    }
-    return text.toString().strip();
+    return new MemoryPartition(String.join("\n", core), String.join("\n", archive), false);
   }
 
   @Override

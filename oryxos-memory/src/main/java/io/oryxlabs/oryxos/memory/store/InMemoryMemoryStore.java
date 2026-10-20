@@ -81,4 +81,13 @@ public class InMemoryMemoryStore implements LongTermMemoryStore {
   public List<String> archivalEntries() {
     return List.copyOf(archive);
   }
+
+  @Override
+  public MemoryPartition partition() {
+    // 与 load() 同一段截断口径：只留最近 MAX_ARCHIVE_ROWS 条，核心区一个元素都不动
+    boolean truncated = archive.size() > MAX_ARCHIVE_ROWS;
+    List<String> recent =
+        truncated ? archive.subList(archive.size() - MAX_ARCHIVE_ROWS, archive.size()) : archive;
+    return new MemoryPartition(String.join("\n", core), String.join("\n", recent), truncated);
+  }
 }

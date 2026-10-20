@@ -1,39 +1,55 @@
 # 快速开始
 
-> ⚠️ **项目处于开发早期**：设计文档已定稿，代码正在按[路线图](/guide/roadmap)推进，以下命令为即将提供的形态预览。
+> ✅ **运行时内核已跑通**：五大核心能力已交付，以下命令均已在真实构建上验证；验收 Demo 与跨节串联验收正按[路线图](/guide/roadmap)推进。
 
 ## 环境要求
 
 - JDK 21+
-- Maven 3.8+
+- Maven 3.8+（仓库自带 `./mvnw`）
 
 ## 构建与运行
 
 ```bash
-# 构建（产出可执行 fat JAR：oryxos-boot/target/oryxos.jar）
-mvn clean package
+# 构建（必须带 clean；产出可执行 fat JAR：oryxos-boot/target/oryxos.jar）
+./mvnw clean package -Ddependency-check.skip=true
 
-# 初始化工作区（创建 .oryxos/ 目录，幂等）
-oryxos init
+# 初始化工作区（创建 .oryxos/ 目录，幂等；同时建表并补齐 schema 漂移）
+java -jar oryxos-boot/target/oryxos.jar init
 
 # 创建一个 Agent（生成 .oryxos/agents/<name>/AGENT.md 最小模板）
-oryxos profile create my-assistant
+java -jar oryxos-boot/target/oryxos.jar profile create my-assistant
 
-# 交互式对话
-oryxos chat
+# 交互式对话（需要模型凭证）
+export DEEPSEEK_API_KEY=sk-...
+java -jar oryxos-boot/target/oryxos.jar chat
 
-# 或启动 REST API 服务（默认端口 8080，OpenAPI 文档在 /swagger-ui）
-oryxos serve
+# 或常驻：REST API + 只读管理台 + OpenAPI 文档，同一个进程、同一个端口
+java -jar oryxos-boot/target/oryxos.jar serve
+#   REST      http://localhost:8080/api/v1
+#   管理台    http://localhost:8080/admin/
+#   接口文档  http://localhost:8080/swagger-ui
 ```
 
-## 两个可运行入口
+也可以用仓库自带的后台启动脚本，凭证从 YAML 配置文件读取（`bin/config.yaml` 不入库）：
 
-OryxOS 交付物中有两个入口，职责不同：
+```bash
+cp bin/config.yaml.example bin/config.yaml   # 填入 deepseek.api-key
+bin/start.sh                                 # 后台启动（含 init 与健康检查）
+bin/stop.sh                                  # 停止
+```
 
-| 入口 | 主类 | 用途 |
-|------|------|------|
-| **fat JAR** | `io.oryxlabs.oryxos.boot.OryxosApplication` | `java -jar oryxos.jar` 启动 Spring Boot + Web 容器，对外提供 REST API 与调度能力 |
-| **CLI** | `io.oryxlabs.oryxos.cli.OryxOsCli` | Picocli 命令行入口，独立运行（如 `oryxos --version` 打印版本信息） |
+## 一个可执行文件，多个子命令
+
+OryxOS 只有一个交付物：fat JAR `oryxos-boot/target/oryxos.jar`，主类是 `io.oryxlabs.oryxos.cli.OryxOsCli`（Picocli）。`java -jar oryxos.jar <子命令>` 走同一个入口，按子命令决定起不起 Spring 上下文：
+
+| 子命令 | 用途 |
+|------|------|
+| `--version` / `status` / `profile …` 等轻命令 | 直接读文件，不启动 Spring（启动快） |
+| `chat` | 交互式对话 |
+| `serve` | 启动 Spring Boot + Web 容器，对外提供 REST API（`/api/v1`）、只读管理台（`/admin/`）、OpenAPI 文档（`/swagger-ui`）与定时任务 |
+| `gateway` | 常驻模式，只跑定时任务、不对外提供 HTTP |
+
+> 第 18 节之前还有一个 `OryxosApplication` 启动类，它已随第 26 节删除——宽扫描根会与 CLI 的装配相互撞车，且 `serve` 已经能起 Web 容器，它没有存在的理由。
 
 ## 一个目录 = 一个 Agent
 

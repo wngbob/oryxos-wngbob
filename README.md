@@ -11,7 +11,7 @@
 [![Language](https://img.shields.io/badge/language-Java%2021-orange.svg)](https://openjdk.org/)
 [![Framework](https://img.shields.io/badge/framework-Spring%20Boot%203.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-%E8%AE%BE%E8%AE%A1%E9%98%B6%E6%AE%B5-yellow.svg)](#项目状态)
+[![Status](https://img.shields.io/badge/status-%E8%BF%90%E8%A1%8C%E6%97%B6%E5%86%85%E6%A0%B8%E5%B7%B2%E8%B7%91%E9%80%9A-brightgreen.svg)](#项目状态)
 [![Community](https://img.shields.io/badge/community-oryx--labs-purple.svg)](docs/oryx-labs.md)
 [![Website](https://img.shields.io/badge/website-wngbob.github.io%2Foryxos--wngbob-ff69b4.svg)](https://wngbob.github.io/oryxos-wngbob/)
 
@@ -67,6 +67,8 @@ OryxOS 是企业私有部署的 **Agent 操作系统**：装在企业自己的 K
 - 🧩 **三档工具扩展**：零代码 Agent 目录 + 复用 MCP（主推）→ 任何语言自写 MCP server → `@Tool` Java Bean，按门槛自由选择
 - 💾 **跨对话记忆**：会话记忆 + 长期记忆两层（`MEMORY.md`），接口预留向量检索升级空间
 - 🌐 **无状态可扩展**：实例无状态、状态外置，从架构第一天为分布式留好路
+- ⏰ **三种触发源，一条链路**：CLI 与 REST API（人推）、cron 定时任务（钟推）汇入同一个 `AgentService`，引擎不感知消息来源
+- 📊 **开箱即用的只读管理台**：`/admin/` 下七页运行时视图（概览、会话、Agent、工具、定时任务、长期记忆、运行状态），与 REST 端点同端口、无写入口
 
 ## 五大核心能力
 
@@ -75,8 +77,8 @@ OryxOS 是企业私有部署的 **Agent 操作系统**：装在企业自己的 K
 | **对接 LLM** | Provider 抽象统一对接主流大模型（DeepSeek、通义、Kimi、智谱、混元、豆包、Anthropic、OpenAI…），Agent 不感知厂商，运行时切换无锁定，支持本地推理（Ollama、vLLM） |
 | **ReAct 循环** | Agent 的推理引擎：LLM 思考 → 调工具 → 看结果 → 再决定，直到给出最终响应；自实现、行为完全可控 |
 | **Memory 记忆** | 会话 + 长期两层记忆，跨对话记住用户偏好、项目背景、关键决策 |
-| **Tool 工具体系** | 内置文件 / Shell / HTTP / 记忆 / 通知 9 个工具，Plugin Tool 三档扩展 |
-| **Web Service** | 全部能力通过 REST API 对外暴露，任何能发 HTTP 的语言都能接入 |
+| **Tool 工具体系** | 内置 **15 个**工具（文件读写编辑、Shell、HTTP、网页搜索与抓取、通知推送、交互提问、长期记忆），Plugin Tool 三档扩展，白名单沙箱强制隔离 |
+| **Web Service** | 10 个 REST 端点统一封装全部能力，任何能发 HTTP 的语言都能接入；同一端口提供只读管理台与 OpenAPI 文档 |
 
 ## 架构
 
@@ -84,7 +86,7 @@ OryxOS 是企业私有部署的 **Agent 操作系统**：装在企业自己的 K
 
 - **三触发源统一入口**：CLI / Web Service（人推）与 AgentScheduler（钟推）汇入同一个 `AgentService`，ReActLoop 不感知消息来源
 - **引擎调度三能力**：`ReActLoop` 每轮经 `PromptBuilder` 组装上下文、经 `ProviderService` 调 LLM、经 `ToolExecutor`（先 Sandbox 白名单校验）执行工具，审计随调用落库
-- **存储下沉**：Session、审计、调度状态落 SQLite；Agent 目录、Bootstrap、`MEMORY.md` 落文件系统——可直接编辑、git 可跟踪
+- **存储下沉**：Session、审计、长期记忆（SQLite 档）与通知渠道落 SQLite；Agent 目录、Bootstrap、`MEMORY.md` 落文件系统——可直接编辑、git 可跟踪
 - **外部依赖全部在边界之外**：LLM API、外部 MCP server、企业 IM webhook，OryxOS 不绑定任何一家
 
 ## 模块结构
@@ -95,13 +97,13 @@ OryxOS 是企业私有部署的 **Agent 操作系统**：装在企业自己的 K
 |------|------|
 | `oryxos-core` | 核心抽象与引擎：`OryxTool`、`Session`、`Profile`、`AgentLoader`、`ContextLoader`、`ReActLoop`、`PromptBuilder`、`ToolExecutor`、`AgentService`、`AgentScheduler` |
 | `oryxos-provider` | 能力一「对接 LLM」：`ProviderService`、Function Calling 适配、provider name 显式映射 |
-| `oryxos-memory` | 能力三「Memory」：`MemoryService` 三层门面、`LongTermMemory`、`MemoryTools` |
-| `oryxos-tool` | 能力四「Tool」：内置 Tool（File / Shell / Http / Notify）、`McpClientService`、`ToolRegistry`、`Sandbox` 接口 + `WhitelistSandbox` |
+| `oryxos-memory` | 能力三「Memory」：`MemoryService` 三层门面、长期记忆三档后端（Markdown 默认 / SQLite / Mem0）、`MemoryTools` |
+| `oryxos-tool` | 能力四「Tool」：15 个内置工具（文件读写编辑、内容与路径检索、Shell、HTTP、网页搜索与抓取、通知、交互、长期记忆）、`ToolRegistry`、`AnnotatedToolAdapter`、`McpClientService`、`SearchProvider` 两档实现、`Sandbox` 接口 + `WhitelistSandbox` |
 | `oryxos-channel-cli` | CLI Channel：`CliChannel`、`oryxos chat` |
-| `oryxos-web` | 能力五「Web Service」：`WebServer`、6 个 `ApiController`、OpenAPI |
-| `oryxos-storage` | SQLite 持久化：Session 与审计表 Repository |
-| `oryxos-cli` | Picocli 主入口、15 个子命令、`ConfigLoader` |
-| `oryxos-boot` | Spring Boot 启动模块、自动配置、依赖聚合（`java -jar` 入口） |
+| `oryxos-web` | 能力五「Web Service」：10 个 REST 端点、6 个 `ApiController`、统一响应信封、只读管理台（7 页）、OpenAPI |
+| `oryxos-storage` | SQLite 持久化：Session、审计、记忆与通知渠道 Repository |
+| `oryxos-cli` | `OryxOsCli` 主入口、15 个子命令、`ConfigLoader` |
+| `oryxos-boot` | Spring Boot 启动模块、自动配置、依赖聚合；fat JAR `oryxos-boot/target/oryxos.jar`（主类 `OryxOsCli`） |
 
 全量 14 个模块（另含 `oryxos-persona` / `oryxos-knowledge` / `oryxos-channel-feishu|wecom|dingtalk`）属扩展演进，核心阶段不建。
 
@@ -117,25 +119,37 @@ OryxOS 是企业私有部署的 **Agent 操作系统**：装在企业自己的 K
 
 ## 快速开始
 
-> ⚠️ **项目处于开发早期**：设计文档已定稿，代码正在按路线图推进，以下命令为即将提供的形态预览。
+> 运行时内核（第 16~26 节）已交付并全绿，以下命令**都已在真实构建上跑过**。全量验收 Demo 与跨节串联验收尚在进行中。
 
 ```bash
-# 环境要求：JDK 21+，Maven 3.8+
+# 环境要求：JDK 21+，Maven 3.8+（仓库自带 ./mvnw）
 
-# 构建
-mvn clean package
+# 构建（必须带 clean；只出旧字节码是 maven-jar-plugin 的已知坑）
+./mvnw clean package -Ddependency-check.skip=true
 
-# 初始化工作区（创建 .oryxos/ 目录，幂等）
-oryxos init
+# 初始化工作区（创建 .oryxos/ 目录，幂等；同时建表并做 schema 漂移补齐）
+java -jar oryxos-boot/target/oryxos.jar init
 
 # 创建一个 Agent（生成 .oryxos/agents/<name>/AGENT.md 最小模板）
-oryxos profile create my-assistant
+java -jar oryxos-boot/target/oryxos.jar profile create my-assistant
 
-# 交互式对话
-oryxos chat
+# 交互式对话（需要模型凭证，见下）
+export DEEPSEEK_API_KEY=sk-...
+java -jar oryxos-boot/target/oryxos.jar chat
 
-# 或启动 REST API 服务（默认端口 8080，OpenAPI 文档在 /swagger-ui）
-oryxos serve
+# 常驻模式：REST API + 只读管理台 + OpenAPI，同一个进程同一个端口
+java -jar oryxos-boot/target/oryxos.jar serve
+#   REST       http://localhost:8080/api/v1
+#   管理台     http://localhost:8080/admin/
+#   接口文档   http://localhost:8080/swagger-ui
+```
+
+也可以用仓库里的后台启动脚本——它把凭证从 YAML 配置文件读出来（`bin/config.yaml` 不入库，模板是 `bin/config.yaml.example`）：
+
+```bash
+cp bin/config.yaml.example bin/config.yaml   # 填入 deepseek.api-key
+bin/start.sh                                 # 后台启动（含 init 与健康检查）
+bin/stop.sh                                  # 停止
 ```
 
 定义一个每日天气 Agent，只需要在 `.oryxos/agents/daily-weather/AGENT.md` 里写：
@@ -155,11 +169,21 @@ schedules: [{ cron: "0 0 8 * * *", message: "查一下今天天气并生成穿�
 
 ## 项目状态
 
-**当前阶段：设计文档已定稿，运行时内核开发中。**
+**当前阶段：运行时内核已跑通。** 五大核心能力（第 16~26 节）全部交付，`mvn clean verify` 全绿（**578** 条测试）；目前在做跨节串联验收与三个验收 Demo。
 
 - [x] 业界调研 / 需求文档 / 技术方案 / AI 编程指南
 - [x] Spec-Kit 开发工作流搭建
-- [ ] 核心阶段：五大核心能力（9 个 Maven 模块，运行时内核）
+- [x] Maven 9 模块工程骨架（单可执行 fat JAR + 15 个 CLI 子命令）
+- [x] 能力一：对接 LLM（Provider 抽象 + provider name 显式映射）
+- [x] 能力二：自实现 ReAct 循环 + 统一处理入口 `AgentService`
+- [x] CLI 与三种运行模式（`chat` / `serve` / `gateway`）、会话持久化与审计落库
+- [x] 通知出站（通用 webhook + 飞书 / Lark / 企业微信方言 + 按 `type` 路由）
+- [x] 能力四：Tool 体系（15 个内置工具 + MCP 客户端 + 三档扩展）
+- [x] 能力三：Memory（门面 + Markdown / SQLite / Mem0 三档长期记忆后端）
+- [x] Sandbox 白名单（文件路径 / Shell 命令 / HTTP 域名）
+- [x] 定时任务（第三触发源，与 CLI / Web 共用同一条链路）
+- [x] 能力五：Web Service（10 个 REST 端点）+ 只读管理台（7 页）
+- [ ] 跨节串联验收（第 27 节）
 - [ ] 三个验收 Demo：每日天气 / 每日科技日报 / 每日 GitHub 日报
 - [ ] OryxOS 1.0 发布 + 项目主页
 
@@ -167,10 +191,10 @@ schedules: [{ cron: "0 0 8 * * *", message: "查一下今天天气并生成穿�
 
 我们的开发理念是：**慢就是快，克制且聚焦**。先把单机的运行时内核做扎实，再逐步生长出分布式能力。
 
-- **阶段一（当前）单机运行时内核**：五大核心能力跑通，配置即 Agent、多 Agent 并存、REST API 接入、对接 MCP
+- **阶段一（当前）单机运行时内核**：五大核心能力已跑通——配置即 Agent、多 Agent 并存、REST API 接入、对接 MCP、只读管理台；剩余工作是把它们串成验收 Demo（第 27 节起）
 - **阶段二（规划）底座分布式**：节点无状态化、状态外置、多副本部署，支撑更大规模与高可用
 - **阶段三（愿景）跨节点 Agent 协作**：引入 Agent 通信底座，对接 A2A，跨节点发现、委托、可靠异步协同
-- **横向能力**（伴随各阶段补齐）：多租户、SSO、完整审计、工具策略、可观测、Web 管理台
+- **横向能力**（伴随各阶段补齐）：多租户、SSO、完整审计、工具策略、可观测、**可写**的管理台（当前交付的第一版管理台是只读的，渠道管理等写入口留到扩展阶段）
 
 **长期目标：走进 Apache 基金会，成为 Apache 顶级项目。**
 
@@ -183,6 +207,7 @@ schedules: [{ cron: "0 0 8 * * *", message: "查一下今天天气并生成穿�
 | [需求文档](docs/DemandAnalysis.md) | 五大核心能力、三档需求、验收标准 |
 | [技术方案](docs/TechnicalSolution.md) | 技术栈、关键技术决策、模块结构、数据模型 |
 | [AI 编程指南](docs/AiProgrammingGuide.md) | Spec-Kit 开发流程、user story 拆解 |
+| [逐节开发记录](specs/) | 每节 `spec.md` / `plan.md` / `tasks.md` / `acceptance-report.md`（交付证据与已知边界） |
 | [项目宣言](docs/oryxos.md) | OryxOS 的愿景与完整叙事 |
 | [CLAUDE.md](CLAUDE.md) | AI agent 在本仓库工作时的必读上下文（架构原则与红线） |
 

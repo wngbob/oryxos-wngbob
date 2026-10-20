@@ -103,7 +103,9 @@ public class ProviderService implements LlmClient {
           .addKeyValue("errorMessage", e.getMessage())
           .setCause(e)
           .log("LLM 调用失败");
-      throw e;
+      // 第 26 节：包装成「Provider 不可用」，让统一异常出口能映射 503；审计那一步在上一行已经做完，
+      // 包装不改变「先落账再上抛」的顺序。cause 的 message 保留在异常消息里（排障用），HTTP 响应体不用它。
+      throw new ProviderUnavailableException(providerName, e);
     }
   }
 

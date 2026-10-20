@@ -1,39 +1,55 @@
 # Quick Start
 
-> ⚠️ **Early stage**: the design is finalized and code is in progress per the [roadmap](/en/guide/roadmap). The commands below preview the upcoming form.
+> ✅ **The runtime kernel is up**: all five core capabilities are delivered and the commands below are verified on real builds. Acceptance demos and cross-section integration checks are progressing per the [roadmap](/en/guide/roadmap).
 
 ## Requirements
 
 - JDK 21+
-- Maven 3.8+
+- Maven 3.8+ (the wrapper `./mvnw` is included)
 
 ## Build & Run
 
 ```bash
-# Build (produces the executable fat JAR: oryxos-boot/target/oryxos.jar)
-mvn clean package
+# Build (always with clean; produces the executable fat JAR: oryxos-boot/target/oryxos.jar)
+./mvnw clean package -Ddependency-check.skip=true
 
-# Initialize the workspace (creates .oryxos/, idempotent)
-oryxos init
+# Initialize the workspace (creates .oryxos/, idempotent; also creates tables and applies schema drift)
+java -jar oryxos-boot/target/oryxos.jar init
 
 # Create an Agent (generates a minimal .oryxos/agents/<name>/AGENT.md template)
-oryxos profile create my-assistant
+java -jar oryxos-boot/target/oryxos.jar profile create my-assistant
 
-# Interactive chat
-oryxos chat
+# Interactive chat (requires model credentials)
+export DEEPSEEK_API_KEY=sk-...
+java -jar oryxos-boot/target/oryxos.jar chat
 
-# Or start the REST API service (default port 8080, OpenAPI docs at /swagger-ui)
-oryxos serve
+# Or run resident: REST API + read-only admin console + OpenAPI docs, one process, one port
+java -jar oryxos-boot/target/oryxos.jar serve
+#   REST      http://localhost:8080/api/v1
+#   Admin     http://localhost:8080/admin/
+#   API docs  http://localhost:8080/swagger-ui
 ```
 
-## Two Runnable Entries
+You can also use the bundled background scripts, which read credentials from a YAML file (`bin/config.yaml` is gitignored):
 
-OryxOS ships two entries with different responsibilities:
+```bash
+cp bin/config.yaml.example bin/config.yaml   # fill in deepseek.api-key
+bin/start.sh                                 # start in background (runs init + health check)
+bin/stop.sh                                  # stop
+```
 
-| Entry | Main class | Purpose |
-|-------|-----------|---------|
-| **fat JAR** | `io.oryxlabs.oryxos.boot.OryxosApplication` | `java -jar oryxos.jar` starts Spring Boot + web container, exposing REST API and scheduling |
-| **CLI** | `io.oryxlabs.oryxos.cli.OryxOsCli` | Picocli command-line entry, runs independently (e.g. `oryxos --version` prints version info) |
+## One Executable, Multiple Subcommands
+
+OryxOS ships a single artifact: the fat JAR `oryxos-boot/target/oryxos.jar`, whose main class is `io.oryxlabs.oryxos.cli.OryxOsCli` (Picocli). `java -jar oryxos.jar <subcommand>` goes through that one entry, and the subcommand decides whether a Spring context is started:
+
+| Subcommand | Purpose |
+|-----------|---------|
+| `--version` / `status` / `profile …` (light commands) | Read files directly, no Spring context (fast startup) |
+| `chat` | Interactive conversation |
+| `serve` | Starts Spring Boot + web container: REST API (`/api/v1`), read-only admin console (`/admin/`), OpenAPI docs (`/swagger-ui`), and scheduled tasks |
+| `gateway` | Long-running mode that only runs scheduled tasks, no HTTP endpoints |
+
+> Before lesson 18 there was also an `OryxosApplication` class. It was deleted in lesson 26 — its broad scan root collided with the CLI assembly, and `serve` already starts the web container, so it had no reason to exist.
 
 ## One Directory = One Agent
 

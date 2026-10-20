@@ -4,12 +4,13 @@ Our development philosophy: **slow is fast — restrained and focused**. Nail th
 
 ## Project Status
 
-**Current phase: design finalized, runtime kernel in development.**
+**Current phase: the runtime kernel is up.** All five core capabilities are delivered and `mvn clean verify` is green (578 tests); cross-section integration checks and the acceptance demos are in progress.
 
 - [x] Industry research / requirements / technical solution / AI programming guide
 - [x] Spec-Kit development workflow
-- [x] Maven 9-module project skeleton (compiles and packages; fat JAR and CLI entries both runnable)
-- [ ] Core phase: five core capabilities (runtime kernel)
+- [x] Maven 9-module project skeleton (compiles and packages; fat JAR and 15 CLI subcommands runnable)
+- [x] Core phase: five core capabilities (runtime kernel)
+- [ ] Cross-section integration checks (lesson 27)
 - [ ] Three acceptance demos: daily weather / daily tech digest / daily GitHub digest
 - [ ] OryxOS 1.0 release
 
@@ -17,7 +18,7 @@ Our development philosophy: **slow is fast — restrained and focused**. Nail th
 
 ### Phase 1 (Now) · Single-node Runtime Kernel
 
-Five core capabilities working: configuration-as-Agent, multi-Agent coexistence, REST API access, MCP integration.
+Five core capabilities are up: configuration-as-Agent, multi-Agent coexistence, REST API plus a read-only admin console, MCP integration. What remains is wiring them into the acceptance demos.
 
 ### Phase 2 (Planned) · Distributed Harness
 
@@ -29,7 +30,7 @@ Introduce an Agent communication fabric over A2A: cross-node discovery, delegati
 
 ### Cross-cutting Capabilities
 
-Built alongside each phase: multi-tenancy, SSO, complete audit, tool policies, observability, web console.
+Built alongside each phase: multi-tenancy, SSO, complete audit, tool policies, observability, and a **writable** web console (the first console shipped in Phase 1 is read-only; write entry points such as channel management are deferred to the extension phase).
 
 ## Long-term Goal
 

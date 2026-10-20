@@ -1,0 +1,19 @@
+{
+  "name": "oryxos-admin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OryxOS 只读管理台（第 26 节）：Vue 3 + Vite 单页应用，产物由 Maven 打进 oryxos.jar",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "vite": "^6.0.7"
+  }
+}

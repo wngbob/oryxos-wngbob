@@ -16,28 +16,30 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
  * 启动日志里报 {@code Found 0 JPA repository interfaces}，然后重命令在取 Bean 时才炸。第 17 节 {@code
  * OryxosApplication} 已踩过这个坑。
  *
- * <p><b>MUST NOT 加 {@code @EnableWebMvc}、MUST NOT 起 SERVLET 容器</b>（仲裁 15）：本节不起 Web 容器，调用方一律用 {@code
- * WebApplicationType.NONE} 构建上下文。同理本模块 MUST NOT 依赖 {@code oryxos-web}。
+ * <p><b>修订注（2026-10-19，第 26 节）：上一条「不起 SERVLET 容器 / MUST NOT 依赖 {@code oryxos-web}」已被推翻。</b>{@code
+ * serve} 起 SERVLET 容器、{@code oryxos-cli} 加了到 {@code oryxos-web} 的依赖边， 故本类必须扫到 {@code
+ * io.oryxlabs.oryxos.web}。{@code chat} / {@code gateway} 仍用 {@code
+ * WebApplicationType.NONE}——是否起容器由命令决定，不由本类决定。原「本节」指第 18 节。
  *
- * <p><b>扫描根 MUST NOT 放宽到 {@code io.oryxlabs.oryxos}</b>：发行物 fat JAR 里 {@code
- * io.oryxlabs.oryxos.boot.OryxosApplication}（{@code oryxos-boot} 的启动类）与本节同类共存，它自己也是
- * {@code @SpringBootApplication} 且带同一套 {@code @EntityScan} /
- * {@code @EnableJpaRepositories}。放宽扫描根会把它当配置类注册， 于是 JPA 仓库 Bean 被注册两遍，重命令直接撞 {@code
- * BeanDefinitionOverrideException} 起不来（实测：{@code chat --message} 在 fat JAR 上 100% 复现；模块内测试看不见，因为
- * {@code oryxos-cli} 的 classpath 上没有 {@code oryxos-boot}）。{@code --help}
- * 之类轻命令不启动上下文，所以这个坑只有跑重命令才暴露。
+ * <p><b>扫描根 MUST NOT 放宽到 {@code io.oryxlabs.oryxos}</b>：第 17 节的 {@code
+ * io.oryxlabs.oryxos.boot.OryxosApplication} 曾与本节主类在 fat JAR 里共存，放宽扫描根会把它自己的 {@code @EntityScan} /
+ * {@code @EnableJpaRepositories} 也注册一遍，重命令撞 {@code BeanDefinitionOverrideException}（当时实测 {@code
+ * chat --message} 100% 复现）。<b>修订注（2026-10-19）：那个类已按第 26 节裁决 ③ 删除，但「逐包列举、不放宽到根」这条纪律不随它走</b>——
+ * 根包下每多一个带 Spring 注解的类，放宽扫描都会悄悄把它拉进来，而这类错误在本模块的单测里看不见。
  *
- * <p><b>为什么只列这两个包</b>：本上下文需要的配置类只有 {@link CliAssemblyConfiguration}（{@code cli}）与 {@code
- * io.oryxlabs.oryxos.provider.ProviderConfiguration}（{@code provider}）；core / tool / memory /
- * storage / channel-cli 的类刻意不带 Spring 注解，Bean 一律在 {@link CliAssemblyConfiguration}
- * 里显式声明（contracts/cli-assembly.md §3）。将来若真在第三个包里新增了带注解的类，MUST 在本行补上——不补不会被装配，且不会报错。
+ * <p><b>为什么逐包列举</b>：本上下文需要的配置类只有 {@link CliAssemblyConfiguration}（{@code cli}）、{@code
+ * io.oryxlabs.oryxos.provider.ProviderConfiguration}（{@code provider}），以及第 26 节新增的 {@code
+ * io.oryxlabs.oryxos.web}（控制器、统一异常出口、Web 配置、探活组件带注解）；core / tool / memory / storage / channel-cli
+ * 的类刻意不带 Spring 注解，Bean 一律在 {@link CliAssemblyConfiguration} 里显式声明（contracts/cli-assembly.md
+ * §3）。将来若真在别的包里新增了带注解的类，MUST 在本行补上——不补不会被装配，且不会报错。
  *
  * <p>本类不含任何逻辑——它的全部作用是把「从哪个包扫 Bean、扫哪些实体与 Repository」这三条写在一处。
  */
 @SpringBootApplication(
     scanBasePackages = {
       "io.oryxlabs.oryxos.cli", // CliApplication + CliAssemblyConfiguration
-      "io.oryxlabs.oryxos.provider" // ProviderConfiguration
+      "io.oryxlabs.oryxos.provider", // ProviderConfiguration
+      "io.oryxlabs.oryxos.web" // 第 26 节：控制器 / 统一异常出口 / WebConfig / DatabaseHealthProbe
     })
 @EntityScan("io.oryxlabs.oryxos.storage.entity")
 @EnableJpaRepositories("io.oryxlabs.oryxos.storage.repository")

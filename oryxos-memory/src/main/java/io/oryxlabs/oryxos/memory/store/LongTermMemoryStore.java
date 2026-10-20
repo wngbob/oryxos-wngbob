@@ -56,4 +56,14 @@ public interface LongTermMemoryStore {
    * @return 归档区条目
    */
   List<String> archivalEntries();
+
+  /**
+   * 只读分区视图（第 26 节 {@code GET /api/v1/memory} 的数据源）。
+   *
+   * <p>与 {@link #load()} 共用同一段截断逻辑：{@code load()} 是「拼成一段给 prompt」，本方法是「分开给管理台看」，
+   * 截断口径必须一致，否则同一份记忆在两个出口显示的内容对不上。
+   *
+   * @return 核心区全文 + 归档区内容 + 归档区是否被截断
+   */
+  MemoryPartition partition();
 }

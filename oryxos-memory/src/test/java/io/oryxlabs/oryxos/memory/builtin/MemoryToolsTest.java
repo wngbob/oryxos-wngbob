@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.oryxlabs.oryxos.core.profile.Profile;
 import io.oryxlabs.oryxos.core.tool.ToolResult;
 import io.oryxlabs.oryxos.memory.MemoryService;
+import io.oryxlabs.oryxos.memory.store.MemoryPartition;
 import io.oryxlabs.oryxos.memory.store.MemoryScope;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -54,6 +55,12 @@ class MemoryToolsTest {
     @Override
     public Optional<String> longTermMemory(Profile profile) {
       return Optional.empty();
+    }
+
+    @Override
+    public MemoryPartition partition() {
+      // 本类判的是 save_memory / recall_memory 两个工具，分区读取与它们无关
+      return new MemoryPartition("", "", false);
     }
   }
 

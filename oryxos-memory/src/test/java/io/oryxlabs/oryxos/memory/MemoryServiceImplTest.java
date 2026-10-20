@@ -14,6 +14,7 @@ import io.oryxlabs.oryxos.core.tool.ToolCatalog;
 import io.oryxlabs.oryxos.memory.store.LongTermMemoryStore;
 import io.oryxlabs.oryxos.memory.store.MarkdownMemoryStore;
 import io.oryxlabs.oryxos.memory.store.MemoryCapability;
+import io.oryxlabs.oryxos.memory.store.MemoryPartition;
 import io.oryxlabs.oryxos.memory.store.MemoryScope;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -79,6 +80,11 @@ class MemoryServiceImplTest {
     @Override
     public List<String> archivalEntries() {
       return List.of();
+    }
+
+    @Override
+    public MemoryPartition partition() {
+      return new MemoryPartition("", "", false);
     }
   }
 

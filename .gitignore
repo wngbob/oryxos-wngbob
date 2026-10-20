@@ -14,6 +14,12 @@ target/
 # OryxOS 工作区（oryxos init 产物）
 .oryxos/
 
+# 管理台前端（第 26 节）：node_modules 与本地产物一律不入库。
+# 产物目录是 static/admin/（Vite build.outDir 直接指过去），不走 Vite 默认的 dist/，
+# 故不列 frontend/dist/——列了也不会命中，只会让后来的人误以为产物在别处。
+**/node_modules/
+oryxos-web/src/main/resources/static/admin/
+
 # Website（VitePress）
 website/node_modules/
 website/.vitepress/dist/
@@ -28,3 +34,8 @@ logs/
 
 # pre-commit 钩子本机环境覆盖(JAVA_HOME 等,各机不同)
 scripts/hooks/local-env.sh
+
+# bin/ 启动脚本的本地配置与运行时产物（凭证与 PID 不入库）
+bin/config.yaml
+bin/*.pid
+bin/*.log

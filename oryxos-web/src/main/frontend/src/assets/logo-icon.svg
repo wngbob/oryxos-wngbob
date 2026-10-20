@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22314F"/>
+      <stop offset="1" stop-color="#0C1424"/>
+    </linearGradient>
+    <linearGradient id="horn" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#F59E0B"/>
+      <stop offset="1" stop-color="#FDE68A"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.46" r="0.55">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- 方形图标版：头像 / favicon 用 -->
+  <rect x="8" y="8" width="224" height="224" rx="56" fill="url(#bg)"/>
+  <rect x="8" y="8" width="224" height="224" rx="56" fill="url(#glow)"/>
+
+  <g stroke="#FFFFFF" stroke-opacity="0.06" stroke-width="1.5" fill="none">
+    <path d="M26,186 L26,152 L54,152"/>
+    <path d="M214,58 L186,58 L186,86"/>
+  </g>
+  <g fill="#FFFFFF" fill-opacity="0.10">
+    <circle cx="58" cy="152" r="3"/>
+    <circle cx="186" cy="90" r="3"/>
+    <circle cx="204" cy="196" r="3"/>
+  </g>
+
+  <!-- 剑羚：放大 1.22 倍居中 -->
+  <g transform="translate(120,120) scale(1.22) translate(-120,-110)">
+    <polygon points="104,112 64,98 76,130" fill="#F59E0B"/>
+    <polygon points="136,112 176,98 164,130" fill="#F59E0B"/>
+    <polygon points="98,113 74,104 81,124" fill="#B45309"/>
+    <polygon points="142,113 166,104 159,124" fill="#B45309"/>
+    <polygon points="108,116 117,111 95,30 88,34" fill="url(#horn)"/>
+    <polygon points="123,111 132,116 152,34 145,30" fill="url(#horn)"/>
+    <polygon points="103,108 137,108 145,138 131,178 120,187 109,178 95,138" fill="#F59E0B"/>
+    <polygon points="103,108 120,112 120,187 109,178 95,138" fill="#FBBF24"/>
+    <g fill="#101828">
+      <polygon points="105,110 113,112 110,150 104,146"/>
+      <polygon points="135,110 127,112 130,150 136,146"/>
+      <polygon points="111,166 129,166 120,186"/>
+    </g>
+  </g>
+</svg>

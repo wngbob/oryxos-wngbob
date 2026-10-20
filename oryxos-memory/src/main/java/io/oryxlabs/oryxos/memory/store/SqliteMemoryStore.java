@@ -106,6 +106,20 @@ public class SqliteMemoryStore implements LongTermMemoryStore {
     return List.copyOf(entries);
   }
 
+  @Override
+  public MemoryPartition partition() {
+    List<String> core = contentsOf(guard(() -> repository.findByScopeOrderByIdAsc(SCOPE_CORE)));
+    List<String> allArchive =
+        contentsOf(guard(() -> repository.findByScopeOrderByIdAsc(SCOPE_ARCHIVAL)));
+    // 先取全量再切尾：截断在这里是「留最近 N 条」，与 load() 的 LIMIT 取到的是同一批（都是 id 最大的 N 条）
+    boolean truncated = allArchive.size() > MAX_ARCHIVE_ROWS;
+    List<String> archive =
+        truncated
+            ? allArchive.subList(allArchive.size() - MAX_ARCHIVE_ROWS, allArchive.size())
+            : allArchive;
+    return new MemoryPartition(String.join("\n", core), String.join("\n", archive), truncated);
+  }
+
   private static List<String> contentsOf(List<MemoryEntry> rows) {
     List<String> contents = new ArrayList<>(rows.size());
     for (MemoryEntry row : rows) {

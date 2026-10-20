@@ -10,6 +10,10 @@
 -- 执行方式：在仓库根目录执行
 --   sqlite3 .oryxos/oryxos.db < oryxos-storage/src/main/resources/db/schema.sql
 -- 或由后续 `oryxos init` 命令内嵌执行（US 落地时接入）。
+--
+-- 旧工作区升级（2026-10-20 起）：`oryxos init` 会按本脚本声明的列做加性补列
+-- （只增不删、只补不改、类型不一致只报告），故新增列时只需改这里。
+-- 本文件仍是列定义的唯一真相源——补列逻辑把它跑进内存库读出应有形状，不维护第二份清单。
 
 -- 每次 Tool 调用记录（审计表，Day One 写入）
 CREATE TABLE IF NOT EXISTS tool_invocations (
