@@ -12,9 +12,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.locks.ReentrantLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,10 +72,18 @@ public class AgentScheduler {
   /**
    * 已注册任务的内存索引：{@code runNow(taskId)} 要靠它反查「这条任务属于哪个 Agent、发什么消息」。
    *
-   * <p>只在 {@link #registerAll()} 里写、只在 {@link #runNow(String)} 里读；用并发 Map 是因为注册发生在启动线程、手动执行发生在 HTTP
-   * 线程。
+   * <p>只在 {@link #registerProfile} 里写、只在 {@link #runNow(String)} 里读；用并发 Map 是因为注册发生在启动线程、手动执行发生在
+   * HTTP 线程。
    */
   private final Map<String, RegisteredTask> registeredTasks = new ConcurrentHashMap<>();
+
+  /**
+   * 调度句柄表：任务 id → {@code TaskScheduler#schedule} 的返回值（第 29 节）。
+   *
+   * <p><b>与 {@link #taskLocks} 分工不同、并存不替代</b>：锁管「同一时刻不跑两份」（只增不减），句柄管「这条规则还在不在」 （重新注册时按 Agent
+   * 归属取消并移除，归属判据见 {@link #cancelTasksOf}）。第 30 节的注销 / 更新就从这张表动手。
+   */
+  private final Map<String, ScheduledFuture<?>> scheduledTasks = new ConcurrentHashMap<>();
 
   public AgentScheduler(
       TaskScheduler taskScheduler,
@@ -110,7 +121,10 @@ public class AgentScheduler {
   }
 
   /**
-   * 扫描全部已装载 Profile 的 {@code schedules} 段，逐条注册进调度器并登记到持久层。
+   * 扫描全部已装载 Profile 的 {@code schedules} 段，逐个交给 {@link #registerProfile}。
+   *
+   * <p>第 29 节起循环体抽成单 Agent 入口：启动扫描与运行时注册走同一段代码、同一套校验。调用点不变（{@code serve} / {@code gateway}
+   * 命令体；{@code chat} 不调用）。
    *
    * <p>任务 id 由「Profile 名 + 配置内序号（从 1 起）」确定性派生（FR-013）；<b>不去重</b>——两条完全相同的规则 派生两个 id、各自注册（去重是静默行为）。
    *
@@ -120,6 +134,32 @@ public class AgentScheduler {
    * <p><b>先登记、后调度</b>：顺序不能反——调度一旦生效，到点就会执行并写执行历史；历史行指向一条还没登记的任务时，
    * 管理台会看到「有历史、没有任务」的孤儿记录。登记失败则这条规则整条不调度，错误在启动日志里可见。
    */
+  public void registerAll() {
+    int total = 0;
+    for (Profile profile : profileRegistry.all()) {
+      total += registerProfile(profile);
+    }
+    log.info("定时任务注册完成：共 {} 条", total);
+  }
+
+  /**
+   * 注册单个 Agent 的定时规则（第 29 节，契约 runtime-registration §3.1）。
+   *
+   * <p><b>先注销、再注册</b>：先取消该 Agent 名下的全部既有句柄（归属按 {@link #cancelTasksOf} 的记录判，不按名字前缀）， 再按当前 {@code
+   * schedules} 逐条注册——同一进程内重复注册是<b>替换</b>而不是翻倍。取消用 {@code cancel(false)}：正在执行的那一次
+   * 不打断，让它跑完，下一次触发用新规则。
+   *
+   * <p><b>任务 id 由「Profile 名 + 配置内序号（从 1 起）」确定性派生</b>（FR-013）；<b>不去重</b>——两条完全相同的规则 派生两个
+   * id、各自注册（去重是静默行为）。
+   *
+   * <p><b>单条失败隔离</b>：任何一条规则失败（cron 段数 / 内容非法、缺失、持久层写失败）只打 ERROR 指名 Agent 与任务后跳过， 不中断注册流程——同 Profile
+   * 的其它规则照常、其它 Agent 不受影响（FR-004）。失败的那条不会留下旧句柄：替换开始时它已经被取消了。
+   *
+   * <p><b>先登记、后调度</b>：顺序不能反——调度一旦生效，到点就会执行并写执行历史；历史行指向一条还没登记的任务时，
+   * 管理台会看到「有历史、没有任务」的孤儿记录。登记失败则这条规则整条不调度，错误在启动日志里可见。
+   *
+   * @return 本次<b>新注册成功</b>的任务数（{@code schedules} 为空或全部失败 → {@code 0}）
+   */
   @SuppressFBWarnings(
       value = "CRLF_INJECTION_LOGS",
       justification =
@@ -127,46 +167,85 @@ public class AgentScheduler {
               + "（契约 §1.3 要求「+ 异常对象」，栈里的原始消息由 logback 渲染、不参与 SLF4J 的格式化），"
               + "而本仓既有的 GlobalExceptionHandler.internalError 也是同样写法（log.error(\"internal error\", ex)）。"
               + "就地豁免并留下理由，比在全局 excludeFilterFile 里开口子更可审计")
-  public void registerAll() {
+  public int registerProfile(Profile profile) {
+    Objects.requireNonNull(profile, "profile");
+    cancelTasksOf(profile.name());
     int registered = 0;
-    for (Profile profile : profileRegistry.all()) {
-      int seq = 0;
-      for (Profile.ScheduleSpec spec : profile.schedules()) {
-        seq++;
-        ScheduleConfig config =
-            new ScheduleConfig(
-                profile.name() + "#" + seq, spec.cron(), spec.zone(), spec.message());
-        try {
-          String cron = normalizeCron(config.cron());
-          ZoneId zone = resolveZone(config.zone());
-          Instant nextRunAt = nextRunAt(cron, zone, clock.instant());
-          taskStore.register(
-              new ScheduledTaskView(
-                  config.id(),
-                  profile.name(),
-                  config.cron(),
-                  config.zone(),
-                  config.message(),
-                  true,
-                  nextRunAt,
-                  null,
-                  null,
-                  0));
-          taskScheduler.schedule(() -> trigger(profile, config), new CronTrigger(cron, zone));
-          registeredTasks.put(config.id(), new RegisteredTask(profile, config));
-          registered++;
-        } catch (RuntimeException e) {
-          // 拼串而非占位符：走 error(String, Throwable) 重载，避免 FindSecBugs 对变参重载的 CRLF 告警
-          log.error(
-              "定时任务注册失败（Agent {}，任务 {}）：{}",
-              sanitizeForLog(profile.name()),
-              sanitizeForLog(config.id()),
-              sanitizeForLog(e.getMessage()),
-              e);
+    int seq = 0;
+    for (Profile.ScheduleSpec spec : profile.schedules()) {
+      seq++;
+      ScheduleConfig config =
+          new ScheduleConfig(profile.name() + "#" + seq, spec.cron(), spec.zone(), spec.message());
+      try {
+        String cron = normalizeCron(config.cron());
+        ZoneId zone = resolveZone(config.zone());
+        Instant nextRunAt = nextRunAt(cron, zone, clock.instant());
+        taskStore.register(
+            new ScheduledTaskView(
+                config.id(),
+                profile.name(),
+                config.cron(),
+                config.zone(),
+                config.message(),
+                true,
+                nextRunAt,
+                null,
+                null,
+                0));
+        ScheduledFuture<?> handle =
+            taskScheduler.schedule(() -> trigger(profile, config), new CronTrigger(cron, zone));
+        if (handle != null) {
+          // null 不是失败：TaskScheduler 允许返回 null（既有测试桩如此），句柄表只收真句柄
+          scheduledTasks.put(config.id(), handle);
         }
+        registeredTasks.put(config.id(), new RegisteredTask(profile, config));
+        registered++;
+      } catch (RuntimeException e) {
+        // 拼串而非占位符：走 error(String, Throwable) 重载，避免 FindSecBugs 对变参重载的 CRLF 告警
+        log.error(
+            "定时任务注册失败（Agent {}，任务 {}）：{}",
+            sanitizeForLog(profile.name()),
+            sanitizeForLog(config.id()),
+            sanitizeForLog(e.getMessage()),
+            e);
       }
     }
-    log.info("定时任务注册完成：共 {} 条", registered);
+    return registered;
+  }
+
+  /**
+   * 取消某个 Agent 名下的全部既有任务：句柄 {@code cancel(false)}，并从句柄表与已注册索引里移除。
+   *
+   * <p><b>归属按 {@link RegisteredTask#profile()} 判，不按 {@code <Agent>#} 前缀判</b>：目录名允许含 {@code
+   * #}（{@code ProfileLoader} 只校验非空），前缀匹配会让 Agent {@code a} 的重新注册误伤 Agent {@code a#b} 的任务（{@code
+   * a#b#1} 也以 {@code a#} 开头）——静默少注册一条，日志里只少一个计数。任务 id 的派生态（FR-013）不变，变的只是「这是谁的任务」的判定依据。
+   *
+   * <p>两张表都要清：句柄表收的是真句柄（{@code TaskScheduler} 可能返回 {@code null}），已注册索引收的是全部成功登记的任务。
+   * 只清其中一张会留下「有索引、没句柄」或反之的半截状态。
+   */
+  private void cancelTasksOf(String agentName) {
+    Set<String> owned = new HashSet<>();
+    for (Map.Entry<String, RegisteredTask> entry : registeredTasks.entrySet()) {
+      if (entry.getValue().profile().name().equals(agentName)) {
+        owned.add(entry.getKey());
+      }
+    }
+    for (String taskId : owned) {
+      ScheduledFuture<?> handle = scheduledTasks.remove(taskId);
+      if (handle != null) {
+        handle.cancel(false);
+      }
+      registeredTasks.remove(taskId);
+    }
+  }
+
+  /**
+   * 当前持有句柄的任务（任务 id → 调度句柄）的不可变副本。
+   *
+   * <p><b>包级私有</b>：测试接缝（「注册后有句柄、重复注册不翻倍」的判定入口），不进对外概念。
+   */
+  Map<String, ScheduledFuture<?>> scheduledTaskHandles() {
+    return Map.copyOf(scheduledTasks);
   }
 
   /**

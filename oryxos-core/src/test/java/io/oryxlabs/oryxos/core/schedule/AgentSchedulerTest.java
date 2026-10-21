@@ -214,10 +214,13 @@ class AgentSchedulerTest {
 
     // 坏的那条不注册，同 Profile 的另一条与另一个 Agent 照常
     assertThat(capturing.triggers()).hasSize(2);
-    assertThat(((CronTrigger) capturing.triggers().get(0)).getExpression())
-        .isEqualTo("0 0 9 * * *");
-    assertThat(((CronTrigger) capturing.triggers().get(1)).getExpression())
-        .isEqualTo("0 0 12 * * *");
+    // 第 29 节起 ProfileRegistry.all() 按 Agent 名排序（tech < weather），注册顺序随之固定但不含语义——
+    // 这里要判的是「两家的好规则都在」，故不锁先后
+    assertThat(
+            capturing.triggers().stream()
+                .map(trigger -> ((CronTrigger) trigger).getExpression())
+                .toList())
+        .containsExactlyInAnyOrder("0 0 9 * * *", "0 0 12 * * *");
   }
 
   @Test

@@ -1,5 +1,6 @@
 package io.oryxlabs.oryxos.core.engine;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.oryxlabs.oryxos.core.profile.Profile;
 import io.oryxlabs.oryxos.core.profile.ProfileRegistry;
 import io.oryxlabs.oryxos.core.session.Session;
@@ -36,6 +37,11 @@ public class AgentService {
    * @param reActLoop 循环本体
    * @param sessionService 持久化会话的接缝（第 18 节实现）
    */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      justification =
+          "依赖注入本身：第 29 节起 ProfileRegistry 是运行时可变索引，本类只读不写、也不该持有副本"
+              + "（副本会让运行时注册在 AgentService 里看不见）。与 PromptBuilder 持 ContextLoader 同一口径")
   public AgentService(
       ProfileRegistry profileRegistry, ReActLoop reActLoop, SessionService sessionService) {
     this.profileRegistry = profileRegistry;

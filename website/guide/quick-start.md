@@ -57,7 +57,6 @@ OryxOS 只有一个交付物：fat JAR `oryxos-boot/target/oryxos.jar`，主类�
 
 ```markdown
 ---
-name: daily-weather
 provider: { name: deepseek, model: deepseek-chat }
 tools: [http_get, notify]
 schedules: [{ cron: "0 0 8 * * *", message: "查一下今天天气并生成穿搭建议" }]
@@ -66,7 +65,19 @@ schedules: [{ cron: "0 0 8 * * *", message: "查一下今天天气并生成穿�
 每天早上自动查天气、生成穿搭建议，通过 notify 推送到团队群（渠道名 team-lark）。
 ```
 
-不写一行代码，到点自动运行，每次调用都有审计记录。
+不写一行代码，到点自动运行，每次调用都有审计记录。Agent 名取自**目录名**，frontmatter 里不需要（也不生效）写 `name`。
+
+仓库里还有一份**四部分俱全**的完整示例，可以直接复制进工作区：
+
+- [`examples/agents/daily-reconcile/`](https://github.com/wngbob/oryxos-wngbob/tree/main/examples/agents/daily-reconcile)：`AGENT.md`（frontmatter + 四步正文）、`REFERENCE.md`、`scripts/reconcile.py`、`skills/report-format` 相对软连接
+- [`examples/skills/report-format/SKILL.md`](https://github.com/wngbob/oryxos-wngbob/tree/main/examples/skills/report-format)：公共 Skill 实体
+
+```bash
+cp -a examples/skills/report-format   .oryxos/skills/
+cp -a examples/agents/daily-reconcile .oryxos/agents/
+```
+
+渐进式披露在这份示例里可以直接看到：正文常驻 system prompt，`REFERENCE.md` 与脚本**不预载**，由模型按需用 `read_file` / `shell` 取——脚本产出进上下文，源码不进。
 
 ::: tip 安全提示
 凭证（如 LLM API Key）不要明文写进 `AGENT.md` 的 frontmatter，用 `${ENV_VAR}` 形式从环境变量注入。

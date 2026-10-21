@@ -22,10 +22,12 @@ import org.slf4j.LoggerFactory;
 /**
  * {@link ContextLoader} 的验收测试（课件第 17 节「四、验收 harness」）。
  *
- * <p>全部走 JUnit 临时目录，不碰网络、不碰真实凭证。守护的四条：
+ * <p>全部走 JUnit 临时目录，不碰网络、不碰真实凭证。守护的五条：
  *
  * <ul>
- *   <li>改文件后<b>下一次</b>组装立即读到新内容（SC-008，无缓存）；
+ *   <li>改 Bootstrap 文件后<b>下一次</b>组装立即读到新内容（SC-008，无缓存）；
+ *   <li>改 {@code AGENT.md} <b>正文</b>后下一次组装立即读到新内容（第 29 节 FR-006——同一无缓存 机制，但读的是另一个文件，Bootstrap
+ *       那条覆盖不到）；
  *   <li>Profile 显式引用的文件缺失 → 报错并<b>指明是哪个文件</b>；
  *   <li>默认 Bootstrap 缺失 → 至少 WARN，不静默跳过；
  *   <li>Skill 软连接悬空 → 报错。
@@ -58,6 +60,19 @@ class ContextLoaderTest {
     String second = loader.load(profile);
 
     assertThat(second).contains("第二版项目说明").doesNotContain("第一版项目说明");
+  }
+
+  @Test
+  @DisplayName("改 AGENT.md 正文后下一次组装立即读到新内容（无缓存）")
+  void rereadsAgentBodyOnEveryLoad() throws IOException {
+    ContextLoader loader = new ContextLoader(oryxos);
+    assertThat(loader.load(profile)).contains("你是 demo Agent，负责演示。");
+
+    // 第 29 节的「改正文不重启即生效」靠的就是这条：每次 load 都重新读 AGENT.md
+    writeAgentFile("demo", "你是 demo Agent，第二版正文。");
+    String second = loader.load(profile);
+
+    assertThat(second).contains("第二版正文").doesNotContain("负责演示");
   }
 
   @Test

@@ -73,6 +73,9 @@ public class SessionApiController {
    * @param agentService 三种触发源共用的唯一处理入口
    * @param profileRegistry 按名查 Agent 是否还在
    */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      justification = "profileRegistry 是 Spring 注入的协作对象；第 29 节起它是运行时可变索引，本类只查不写，持有是依赖注入本身")
   public SessionApiController(
       SessionService sessionService, AgentService agentService, ProfileRegistry profileRegistry) {
     this.sessionService = sessionService;

@@ -3,7 +3,7 @@ package io.oryxlabs.oryxos.core;
 /**
  * oryxos-core —— 核心抽象与引擎。
  *
- * <p>规划内容：{@code OryxTool}、{@code Session}、{@code Profile}、{@code AgentLoader}（deriveProfile）、
+ * <p>规划内容：{@code OryxTool}、{@code Session}、{@code Profile}、{@code ProfileLoader}（deriveProfile）、
  * {@code ContextLoader}、{@code ReActLoop}、{@code PromptBuilder}、{@code ToolExecutor}、 {@code
  * AgentService}、{@code AgentScheduler}。
  *

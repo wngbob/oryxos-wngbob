@@ -1,5 +1,6 @@
 package io.oryxlabs.oryxos.core.profile;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -7,9 +8,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.UnaryOperator;
 import java.util.regex.Matcher;
@@ -38,6 +42,13 @@ public class ProfileLoader {
 
   /** Agent 目录内固定文件名。 */
   private static final String AGENT_FILE = "AGENT.md";
+
+  /** 目录内按需资源的子目录 / 文件名（第 29 节 `inspect` 的资源识别）。 */
+  private static final String SCRIPTS_DIR = "scripts";
+
+  private static final String SKILLS_DIR = "skills";
+
+  private static final String REFERENCE_FILE = "REFERENCE.md";
 
   /** frontmatter 分隔符：开头与结尾各一行，单独成行。 */
   private static final String FRONTMATTER_DELIMITER = "---";
@@ -155,7 +166,85 @@ public class ProfileLoader {
     public record Failure(String agentName, String reason) {}
   }
 
+  /**
+   * 运行时派生单个 Agent 目录的 Profile（第 29 节，FR-004 / 契约 runtime-registration §1.1）。
+   *
+   * <p><b>与启动扫描走同一段校验</b>：最终都落到 {@link #toProfile}，因此失败消息与 {@code loadAllDetailed()} 里的 {@code
+   * Failure.reason} <b>逐字相同</b>——这是「同一异常类型 + 同一消息」可机械判定的结构前提。
+   *
+   * @param agentDir Agent 目录（{@code .../agents/<name>}）
+   * @throws ProfileLoadException 缺 {@code AGENT.md}、frontmatter 非法、必填项缺失或厂商未知
+   */
+  public Profile deriveProfile(Path agentDir) {
+    Path dir = Objects.requireNonNull(agentDir, "agentDir");
+    return toProfile(agentNameOf(dir), readAgentMarkdown(dir).frontmatter());
+  }
+
+  /**
+   * 读取一个 Agent 目录的结构快照：frontmatter / 正文 / 资源清单（第 29 节，契约 runtime-registration §1.2）。
+   *
+   * <p><b>只做结构解析</b>：不校验 {@code provider} 等语义（那是 {@link #deriveProfile} 的事），也不读取资源内容—— 渐进式披露要求
+   * {@code REFERENCE.md} / 脚本 / Skill 正文不被预载。
+   *
+   * @param agentDir Agent 目录（{@code .../agents/<name>}）
+   * @throws ProfileLoadException 缺 {@code AGENT.md}、IO 错或 YAML 非法
+   */
+  public AgentDir inspect(Path agentDir) {
+    Path dir = Objects.requireNonNull(agentDir, "agentDir");
+    AgentMarkdown markdown = readAgentMarkdown(dir);
+    return new AgentDir(
+        agentNameOf(dir), dir, markdown.frontmatter(), markdown.body(), resources(dir));
+  }
+
+  /**
+   * 一个 Agent 目录的结构快照（{@link #inspect} 的产物）。
+   *
+   * <p>{@code name} 取自目录名——目录名是 Agent 名的唯一真相源，frontmatter 里的 {@code name} 被忽略。
+   *
+   * @param name Agent 名（目录名）
+   * @param path Agent 目录本身
+   * @param frontmatter 已按字符串键归一化的 frontmatter；空 frontmatter 为 {@code Map.of()}
+   * @param body 收尾 {@code ---} 之后的正文（去首尾空白）；空正文为 {@code ""}
+   * @param resources 相对路径、字典序、不递归的资源清单；只反映存在性
+   */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP",
+      justification =
+          "紧凑构造器已用 Collections.unmodifiableMap 包住副本，调用方改不动内容；"
+              + "SpotBugs 只看声明的 Map 类型（可变接口），看不到这层包装")
+  public record AgentDir(
+      String name,
+      Path path,
+      Map<String, Object> frontmatter,
+      String body,
+      List<String> resources) {
+
+    /** 归一化：可空集合收敛为不可变副本，调用方改动不影响快照。 */
+    public AgentDir {
+      frontmatter =
+          frontmatter == null
+              ? Map.of()
+              : Collections.unmodifiableMap(new LinkedHashMap<>(frontmatter));
+      body = body == null ? "" : body;
+      resources = resources == null ? List.of() : List.copyOf(resources);
+    }
+  }
+
   private Profile loadOne(Path agentDir, String agentName) {
+    return toProfile(agentName, readAgentMarkdown(agentDir).frontmatter());
+  }
+
+  /** Agent 名 = 目录名；根路径没有文件名，给出能看懂为什么失败的错。 */
+  private static String agentNameOf(Path agentDir) {
+    Path fileName = agentDir.getFileName();
+    if (fileName == null) {
+      throw new ProfileLoadException("无法从路径取得 Agent 名（传入的是文件系统根目录？）: " + agentDir);
+    }
+    return fileName.toString();
+  }
+
+  /** 读 {@code AGENT.md} 并拆成 frontmatter + 正文——启动扫描与运行时派生共用这一段。 */
+  private static AgentMarkdown readAgentMarkdown(Path agentDir) {
     Path agentFile = agentDir.resolve(AGENT_FILE);
     if (!Files.isRegularFile(agentFile)) {
       throw new ProfileLoadException("缺少 " + AGENT_FILE);
@@ -166,10 +255,13 @@ public class ProfileLoader {
     } catch (IOException e) {
       throw new ProfileLoadException("读取 " + AGENT_FILE + " 失败: " + e.getMessage(), e);
     }
-    return toProfile(agentName, parseFrontmatter(raw));
+    return parseAgentMarkdown(raw);
   }
 
-  private Map<String, Object> parseFrontmatter(String raw) {
+  /** AGENT.md 的结构解析结果：frontmatter 与正文。{@code inspect} / {@code deriveProfile} / 启动扫描共用一段解析。 */
+  private record AgentMarkdown(Map<String, Object> frontmatter, String body) {}
+
+  private static AgentMarkdown parseAgentMarkdown(String raw) {
     String text = raw.startsWith("\uFEFF") ? raw.substring(1) : raw;
     String[] lines = text.split("\\R", -1);
     if (lines.length == 0 || !FRONTMATTER_DELIMITER.equals(lines[0].trim())) {
@@ -193,17 +285,51 @@ public class ProfileLoader {
     } catch (RuntimeException e) {
       throw new ProfileLoadException("frontmatter 不是合法 YAML: " + e.getMessage(), e);
     }
+    Map<String, Object> frontmatter;
     if (parsed == null) {
-      return Map.of();
-    }
-    if (!(parsed instanceof Map<?, ?> map)) {
+      frontmatter = Map.of();
+    } else if (!(parsed instanceof Map<?, ?> map)) {
       throw new ProfileLoadException("frontmatter 顶层必须是键值映射");
+    } else {
+      frontmatter = new LinkedHashMap<>();
+      for (Map.Entry<?, ?> entry : map.entrySet()) {
+        frontmatter.put(String.valueOf(entry.getKey()), entry.getValue());
+      }
     }
-    Map<String, Object> result = new LinkedHashMap<>();
-    for (Map.Entry<?, ?> entry : map.entrySet()) {
-      result.put(String.valueOf(entry.getKey()), entry.getValue());
+    // 正文统一用 \n 重建（CRLF 文件不把 \r 带进 system prompt），并去掉首尾空白
+    String body = String.join("\n", Arrays.copyOfRange(lines, closing + 1, lines.length)).strip();
+    return new AgentMarkdown(frontmatter, body);
+  }
+
+  /**
+   * 资源清单：{@code scripts/} 的直接子文件 + {@code skills/} 的直接子项 + {@code REFERENCE.md}。
+   *
+   * <p>只 {@code list} 一层、<b>不递归、不读内容</b>；结果按字典序排序，让输出稳定可断言。
+   */
+  private static List<String> resources(Path agentDir) {
+    List<String> resources = new ArrayList<>();
+    addEntries(agentDir.resolve(SCRIPTS_DIR), true, resources);
+    addEntries(agentDir.resolve(SKILLS_DIR), false, resources);
+    if (Files.isRegularFile(agentDir.resolve(REFERENCE_FILE))) {
+      resources.add(REFERENCE_FILE);
     }
-    return result;
+    resources.sort(Comparator.naturalOrder());
+    return List.copyOf(resources);
+  }
+
+  /** 列一层目录；{@code filesOnly} 为真时只收普通文件（链接指向普通文件也算）。目录不存在即视为没有资源。 */
+  private static void addEntries(Path dir, boolean filesOnly, List<String> into) {
+    if (!Files.isDirectory(dir)) {
+      return;
+    }
+    try (Stream<Path> entries = Files.list(dir)) {
+      entries
+          .filter(entry -> !filesOnly || Files.isRegularFile(entry))
+          .map(entry -> dir.getFileName() + "/" + entry.getFileName())
+          .forEach(into::add);
+    } catch (IOException e) {
+      throw new ProfileLoadException("无法列出目录: " + dir, e);
+    }
   }
 
   private Profile toProfile(String agentName, Map<String, Object> frontmatter) {
@@ -377,8 +503,17 @@ public class ProfileLoader {
     return result;
   }
 
-  /** 装载单条失败的内部信号，只在本类内流转，不外抛。 */
-  private static final class ProfileLoadException extends RuntimeException {
+  /**
+   * 装载单条失败的信号（第 29 节由 private 提为 public，<b>仅可见性变更</b>）。
+   *
+   * <p><b>为什么必须公开</b>：FR-004 / SC-003 要求「启动扫描」与「运行时派生」的失败可机械判定为同一异常类型；第 30 节的运行时 API 也要按类型捕获并映射成
+   * HTTP 4xx。
+   *
+   * <p><b>构造器仍是包级私有</b>：外部只捕获、不构造——异常只能由本类的校验路径产生，不让调用方伪造判定依据。
+   *
+   * <p>{@code final}：构造器会抛异常的类可被继承的话，子类 finalizer 攻击有缝（FindSecBugs {@code CT_CONSTRUCTOR_THROW}）。
+   */
+  public static final class ProfileLoadException extends RuntimeException {
 
     ProfileLoadException(String message) {
       super(message);

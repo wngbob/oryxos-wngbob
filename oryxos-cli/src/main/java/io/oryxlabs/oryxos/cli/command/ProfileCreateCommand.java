@@ -13,7 +13,7 @@ import picocli.CommandLine.Parameters;
  * {@code oryxos profile create <name>}：生成一个最小可用的 Agent 定义（FR-011、contracts/cli-surface.md §2.6）。
  *
  * <p><b>Agent 名就是目录名</b>：建出来的是 {@code .oryxos/agents/<name>/AGENT.md}，不额外写一份 Profile 文件 ——Profile 由
- * {@code AgentLoader} 从 frontmatter 派生，手写第二份必然与目录名漂移。
+ * {@code ProfileLoader} 从 frontmatter 派生，手写第二份必然与目录名漂移。
  *
  * <p><b>模板必须一建出来就是有效 Agent</b>：{@code profile create weather} 之后立刻 {@code profile list} 就该看到
  * 「有效」，否则用户会以为是自己写错了。所以厂商名取自 {@link ProviderProperties#SUPPORTED_PROVIDERS}， 而不是在 CLI

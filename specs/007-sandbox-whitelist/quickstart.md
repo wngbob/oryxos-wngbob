@@ -193,6 +193,12 @@ sqlite3 .oryxos/oryxos.db \
 
 **回滚**：验完把 `shell.allowed_commands` 改回默认清单（见 `contracts/sandbox-whitelist.md` §3.3）。
 
+> **修订注（2026-10-21，第 29 节交付后补记）**：`contracts/sandbox-whitelist.md` §3.3 记的是第 24 节交付时的 **9 条**清单；
+> 第 29 节 T001 在其末尾追加了 `python3`，当前随包默认值见 `oryxos-boot/src/main/resources/application.yaml` 的
+> `shell.allowed_commands`（**10 条**）。回滚请以该文件当前内容为准，别照抄 §3.3 的字面量——少一条 `python3`
+> 会让第 29 节示例 Agent 的 `scripts/reconcile.py` 在真链路上跑不动，且回滚本身不会报错。
+> 契约 §3.3 与本节其余文字是第 24 节的交付留痕，按惯例保留不动。
+
 ---
 
 ## Step 8（人工项）：接口中立性自查（思维练习，不产码）

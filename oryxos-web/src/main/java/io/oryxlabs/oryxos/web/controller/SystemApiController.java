@@ -61,6 +61,9 @@ public class SystemApiController {
    * @param sessionService 活跃会话数
    * @param toolRegistry 已注册工具数
    */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      justification = "profileRegistry 是 Spring 注入的协作对象；第 29 节起它是运行时可变索引，本类只查不写，持有是依赖注入本身")
   public SystemApiController(
       DatabaseHealthProbe databaseHealthProbe,
       ProviderProperties providerProperties,

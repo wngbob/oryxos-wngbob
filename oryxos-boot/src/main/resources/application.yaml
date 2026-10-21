@@ -88,7 +88,9 @@ file:
   allowed_paths: ["."]              # 当前工作目录(启动时标准化为绝对路径)
 shell:
   # 留空 = 全拒(不是不校验);本块是劝阻级防线,防不住蓄意绕过。条目是「可执行文件名」,写 /bin/ls 会永不匹配。
-  allowed_commands: [ls, cat, head, tail, grep, find, wc, pwd, git]
+  # 第 29 节:python3 供 Agent 的 scripts/ 脚本经 shell 运行——章程原则 IV 要求解释器只在管理员显式白名单内放行
+  # (本机无 python;「脚本只能跑本 Agent 的 scripts/ 目录」是已知边界,不做)。
+  allowed_commands: [ls, cat, head, tail, grep, find, wc, pwd, git, python3]
 http:
   # 留空 = 全拒(不是不校验);本块是劝阻级防线,防不住蓄意绕过。
   allowed_domains:

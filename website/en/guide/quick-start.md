@@ -57,7 +57,6 @@ To define a daily-weather Agent, just write `.oryxos/agents/daily-weather/AGENT.
 
 ```markdown
 ---
-name: daily-weather
 provider: { name: deepseek, model: deepseek-chat }
 tools: [http_get, notify]
 schedules: [{ cron: "0 0 8 * * *", message: "Check today's weather and give outfit advice" }]
@@ -67,7 +66,19 @@ Every morning, check the weather, generate outfit advice, and push it to the
 team group via notify (channel name team-lark).
 ```
 
-No code. Runs on schedule. Every call audited.
+No code. Runs on schedule. Every call audited. The Agent name comes from the **directory name** — no `name` in frontmatter (it would be ignored).
+
+The repo also ships a **complete** example with all four parts, ready to copy into a workspace:
+
+- [`examples/agents/daily-reconcile/`](https://github.com/wngbob/oryxos-wngbob/tree/main/examples/agents/daily-reconcile): `AGENT.md` (frontmatter + four-step body), `REFERENCE.md`, `scripts/reconcile.py`, and a relative symlink `skills/report-format`
+- [`examples/skills/report-format/SKILL.md`](https://github.com/wngbob/oryxos-wngbob/tree/main/examples/skills/report-format): the shared Skill entity
+
+```bash
+cp -a examples/skills/report-format   .oryxos/skills/
+cp -a examples/agents/daily-reconcile .oryxos/agents/
+```
+
+Progressive disclosure is visible in this example: the body lives in the system prompt, while `REFERENCE.md` and the script are **not preloaded** — the model fetches them on demand with `read_file` / `shell`, so the script's output enters the context but its source does not.
 
 ::: tip Security note
 Never write credentials (e.g. LLM API keys) in plaintext into `AGENT.md` frontmatter — inject them from environment variables via `${ENV_VAR}` placeholders.

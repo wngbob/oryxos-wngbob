@@ -95,7 +95,7 @@ OryxOS 是企业私有部署的 **Agent 操作系统**：装在企业自己的 K
 
 | 模块 | 职责 |
 |------|------|
-| `oryxos-core` | 核心抽象与引擎：`OryxTool`、`Session`、`Profile`、`AgentLoader`、`ContextLoader`、`ReActLoop`、`PromptBuilder`、`ToolExecutor`、`AgentService`、`AgentScheduler` |
+| `oryxos-core` | 核心抽象与引擎：`OryxTool`、`Session`、`Profile`、`ProfileLoader`（目录解析 / Profile 派生）、`ContextLoader`、`ReActLoop`、`PromptBuilder`、`ToolExecutor`、`AgentService`、`AgentScheduler` |
 | `oryxos-provider` | 能力一「对接 LLM」：`ProviderService`、Function Calling 适配、provider name 显式映射 |
 | `oryxos-memory` | 能力三「Memory」：`MemoryService` 三层门面、长期记忆三档后端（Markdown 默认 / SQLite / Mem0）、`MemoryTools` |
 | `oryxos-tool` | 能力四「Tool」：15 个内置工具（文件读写编辑、内容与路径检索、Shell、HTTP、网页搜索与抓取、通知、交互、长期记忆）、`ToolRegistry`、`AnnotatedToolAdapter`、`McpClientService`、`SearchProvider` 两档实现、`Sandbox` 接口 + `WhitelistSandbox` |
@@ -142,6 +142,25 @@ java -jar oryxos-boot/target/oryxos.jar serve
 #   REST       http://localhost:8080/api/v1
 #   管理台     http://localhost:8080/admin/
 #   接口文档   http://localhost:8080/swagger-ui
+```
+
+### 一个完整的 Agent 目录长什么样
+
+[`examples/agents/daily-reconcile/`](examples/agents/daily-reconcile/) 是一个可直接运行的完整 Agent 目录（**四部分俱全**），照着它写比看文档快：
+
+| 部分 | 文件 | 作用 |
+|------|------|------|
+| 主文件 | `AGENT.md` | frontmatter = 运行配置（provider / tools / schedules），正文 = 任务指令，**常驻 system prompt** |
+| 参考 | `REFERENCE.md` | 字段字典与判定口径，**不预载**，模型用 `read_file` 按需取 |
+| 脚本 | `scripts/reconcile.py` | 任意代码，经 `shell` 调解释器运行；**产出进上下文、源码不进** |
+| Skill | `skills/report-format -> ../../../skills/report-format` | 相对软连接，指向公共 Skill 实体；只注入 name / description / 路径 |
+
+复制进工作区即可（`-a` 保留软连接，别用 `-r` 跟随）：
+
+```bash
+cp -a examples/skills/report-format   .oryxos/skills/
+cp -a examples/agents/daily-reconcile .oryxos/agents/
+java -jar oryxos-boot/target/oryxos.jar profile list   # daily-reconcile 应出现在列表里
 ```
 
 REST 端点共 **15 个**，全部落在 `/api/v1` 下，统一响应信封 `{code, message, data, timestamp}`：

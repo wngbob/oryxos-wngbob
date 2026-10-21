@@ -389,6 +389,20 @@ grep -n "全拒\|劝阻级" oryxos-boot/src/main/resources/application.yaml
 
 ## Step 9 — 收尾与回滚
 
+> **修订注（2026-10-21，第 29 节交付后补记）——下面第 1 步的预期值与 `sed` 命令均已过期，MUST NOT 照抄。**
+> 第 29 节 T001 在 `shell.allowed_commands` 末尾追加了 `python3`（放行解释器，示例 Agent 的
+> `scripts/reconcile.py` 要经 `shell` 跑），当前随包默认值是 **10 条**：
+> `[ls, cat, head, tail, grep, find, wc, pwd, git, python3]`。照抄下面那条 `sed` 会把 `python3` **一并抹掉**，
+> 而且不会报错——后果是第 29 节的示例 Agent 在真链路上跑不动脚本。现在的正确做法是：
+>
+> ```bash
+> grep -n '^  allowed_commands:' oryxos-boot/src/main/resources/application.yaml
+> # 预期：allowed_commands: [ls, cat, head, tail, grep, find, wc, pwd, git, python3]
+> ```
+>
+> 若 Step 5b 改过还没还原，**按当前仓库内容改，别照抄这一节的字面量**；改完再 grep 复查。
+> 下文原文保留不动，作为第 24 节当时的留痕。
+
 ```bash
 # 1) 若走过 Step 5b：把随包默认值改回来（MUST，否则会带进下一次提交）
 cd /home/wngbob/oryxos-wngbob
