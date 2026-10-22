@@ -1,6 +1,7 @@
 package io.oryxlabs.oryxos.memory;
 
 import io.oryxlabs.oryxos.core.profile.Profile;
+import io.oryxlabs.oryxos.core.tool.ToolExecutionContext;
 import io.oryxlabs.oryxos.memory.store.LongTermMemoryStore;
 import io.oryxlabs.oryxos.memory.store.MemoryPartition;
 import io.oryxlabs.oryxos.memory.store.MemoryScope;
@@ -14,8 +15,9 @@ import java.util.Optional;
  * <p><b>为什么不缓存 {@code load()} 的结果</b>：门面一旦缓存，Agent 调完 {@code save_memory} 后下一轮就看不见自己刚记的东西，
  * 而「记了却想不起来」是最难查的一类问题。后端每档都保证「每次重新读」，门面这一层再缓存等于把三档的承诺一次作废。
  *
- * <p><b>{@code longTermMemory} 的 {@code profile} 参数不使用</b>：长期记忆是<b>全局单份</b>（Markdown 档一个文件、SQLite
- * 档一张表）， 不按 Agent 隔离。签名照旧是因为那是 core 侧既有的接缝，本节一个字不改。
+ * <p><b>{@code longTermMemory} 的 {@code profile} 参数</b>：第 30 节起用于置入「这次读的是哪个 Agent 的记忆」（{@link
+ * ToolExecutionContext}），Markdown 档据此把落点从全局 {@code memory/MEMORY.md} 换到 {@code
+ * agents/<name>/MEMORY.md}。 <b>签名一字未改</b>——那是 core 侧既有接缝；SQLite / Mem0 两档仍全局单份，不按 Agent 隔离。
  */
 public class MemoryServiceImpl implements MemoryService {
 
@@ -29,18 +31,20 @@ public class MemoryServiceImpl implements MemoryService {
   /**
    * 取跨会话的长期记忆文本（{@link MemorySource} 接缝的实现）。
    *
-   * <p><b>{@code profile} 参数本节不使用</b>：长期记忆是<b>全局单份</b>——Markdown 档一个文件、SQLite 档一张表，不按 Agent 隔离。
-   * 签名照旧是因为那是 core 侧既有接缝的签名，本节只实现、不修改。
+   * <p><b>{@code profile} 参数用于选定记忆落点</b>：本方法在 {@link ToolExecutionContext#callAs} 里委托后端，Markdown
+   * 档据此读写 {@code agents/<name>/MEMORY.md}；无 Agent 上下文时回退全局文件。
    *
    * <p><b>MUST NOT 混入会话历史</b>：那是两件生命周期完全不同的事（长期记忆跨会话都在，会话历史只属于这一次对话）， 混在一起返回会把它们焊死，也让 {@code
    * PromptBuilder} 无法独立决定各自怎么截断。
    *
-   * @param profile 当前 Agent 的运行时配置（本实现不使用）
+   * @param profile 当前 Agent 的运行时配置；为 {@code null} 时按无上下文处理
    * @return 长期记忆文本；还没记过任何东西时返回 {@link Optional#empty()}，让 {@code PromptBuilder} 把 prompt 第二部分整条跳过
    */
   @Override
   public Optional<String> longTermMemory(Profile profile) {
-    String text = store.load();
+    // 第 30 节 FR-007：置入「这次读的是哪个 Agent 的记忆」再委托后端，finally 复原。
+    // profile 为空时 callAs(null) 等同无上下文（Markdown 档回退全局路径），与第 22 节行为一致
+    String text = ToolExecutionContext.callAs(profile == null ? null : profile.name(), store::load);
     // 空白 = 还没记过任何东西：返回 empty 让 PromptBuilder 把 prompt 第二部分整条跳过，而不是塞一段空壳占上下文
     return text == null || text.isBlank() ? Optional.empty() : Optional.of(text);
   }

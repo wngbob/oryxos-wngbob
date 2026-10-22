@@ -233,6 +233,27 @@ class AgentSchedulerRegisterTest {
   }
 
   @Test
+  @DisplayName("AgentSchedulerRegisterTest：registeredTaskIds 只含当前已注册任务，注销后即移除且不可变")
+  void registeredTaskIds_tracksLiveRegistrationsOnly() {
+    AgentScheduler scheduler = scheduler();
+    Profile recon =
+        profile(
+            "recon",
+            List.of(
+                new Profile.ScheduleSpec("0 9 * * *", "UTC", "早报"),
+                new Profile.ScheduleSpec("0 18 * * *", "UTC", "晚报")));
+    scheduler.registerProfile(recon);
+
+    assertThat(scheduler.registeredTaskIds()).containsOnly("recon#1", "recon#2");
+    assertThatThrownBy(() -> scheduler.registeredTaskIds().clear())
+        .isInstanceOf(UnsupportedOperationException.class);
+
+    // 删除 Agent / 从 AGENT.md 移除 schedule 后，库里可能留下旧行；这个集合是「还有定义」的唯一判据
+    scheduler.unregisterProfile(recon);
+    assertThat(scheduler.registeredTaskIds()).isEmpty();
+  }
+
+  @Test
   @DisplayName("AgentSchedulerRegisterTest：registerAll 把各 Agent 的新注册数求和")
   void registerAll_sumsPerAgentRegistrations() {
     Profile recon =

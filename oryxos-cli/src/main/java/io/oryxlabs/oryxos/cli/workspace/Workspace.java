@@ -31,6 +31,9 @@ public final class Workspace {
   /** SQLite 库文件名，轻命令的原生 JDBC 路径连它。 */
   private static final String DB_FILE = "oryxos.db";
 
+  /** 归档子目录名：删除 Agent 时整目录移进来，不物理删（第 30 节 FR-001）。 */
+  private static final String ARCHIVE_DIR = "archive";
+
   /** 工作区根的系统属性覆盖键（第 27 节，整机测试用）。 */
   private static final String ROOT_PROPERTY = "oryxos.root";
 
@@ -80,6 +83,13 @@ public final class Workspace {
    */
   public Path agentsDir() {
     return root.resolve(AGENTS_DIR);
+  }
+
+  /**
+   * @return 归档目录（{@code .oryxos/archive}）：删除 Agent 时整目录移到这里，不物理删（第 30 节 FR-001）
+   */
+  public Path archiveDir() {
+    return root.resolve(ARCHIVE_DIR);
   }
 
   /**

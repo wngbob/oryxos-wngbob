@@ -2,6 +2,7 @@ package io.oryxlabs.oryxos.cli.command;
 
 import io.oryxlabs.oryxos.cli.CliApplication;
 import io.oryxlabs.oryxos.cli.workspace.Workspace;
+import io.oryxlabs.oryxos.core.agent.WorkspaceWatcher;
 import io.oryxlabs.oryxos.core.schedule.AgentScheduler;
 import java.util.concurrent.CountDownLatch;
 import org.springframework.boot.Banner;
@@ -48,6 +49,8 @@ public final class ServeCommand implements Runnable {
             .run()) {
       // 定时任务只在常驻模式注册（FR-012 / 裁决 3）：chat 不碰这一行，装配处也不碰
       context.getBean(AgentScheduler.class).registerAll();
+      // 实时监听同样只在常驻模式起（第 30 节 FR-003）：chat 是一次性的，监听一个随即退出的进程没有意义
+      context.getBean(WorkspaceWatcher.class).start();
       System.out.println("serve 已启动（Bean 数 " + context.getBeanDefinitionCount() + "）");
       System.out.println("HTTP 端口 " + port + " 已打开");
       System.out.println("  REST 接口  http://localhost:" + port + "/api/v1");

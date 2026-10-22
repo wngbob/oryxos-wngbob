@@ -19,6 +19,7 @@ import io.oryxlabs.oryxos.core.session.JpaSessionService;
 import io.oryxlabs.oryxos.core.session.Session;
 import io.oryxlabs.oryxos.core.session.SessionMessage;
 import io.oryxlabs.oryxos.core.session.SessionService;
+import io.oryxlabs.oryxos.core.tool.ToolExecutionContext;
 import io.oryxlabs.oryxos.memory.MemoryService;
 import io.oryxlabs.oryxos.memory.MemoryServiceImpl;
 import io.oryxlabs.oryxos.memory.builtin.MemoryTools;
@@ -32,7 +33,6 @@ import io.oryxlabs.oryxos.storage.entity.ToolInvocation;
 import io.oryxlabs.oryxos.storage.repository.SessionRepository;
 import io.oryxlabs.oryxos.storage.repository.ToolInvocationRepository;
 import io.oryxlabs.oryxos.tool.registry.ToolRegistry;
-import io.oryxlabs.oryxos.web.controller.MemoryApiController;
 import io.oryxlabs.oryxos.web.controller.SessionApiController;
 import io.oryxlabs.oryxos.web.controller.ToolApiController;
 import io.oryxlabs.oryxos.web.controller.dto.ToolView;
@@ -141,10 +141,11 @@ class MockProviderFlowTest {
     assertThat(invocation.getSuccess()).isTrue();
     assertThat(invocation.getSessionId()).isEqualTo(session.id());
 
-    // 长期记忆真的落了文件（默认 markdown 档），不是只写了个内存变量
+    // 长期记忆真的落了文件（默认 markdown 档），不是只写了个内存变量。
+    // 第 30 节起 Markdown 档按 Agent 隔离，落点是 agents/<name>/MEMORY.md——工具执行时上下文由 ToolExecutor 置入
     String memoryFile =
         Files.readString(
-            workspace.root().resolve("memory").resolve("MEMORY.md"), StandardCharsets.UTF_8);
+            workspace.agentsDir().resolve(AGENT).resolve("MEMORY.md"), StandardCharsets.UTF_8);
     assertThat(memoryFile).contains("我喜欢喝美式咖啡");
 
     // 会话历史：user → assistant(工具请求) → tool(结果) → assistant(最终答复)
@@ -173,7 +174,9 @@ class MockProviderFlowTest {
     assertThat(listed.get(0).messageCount()).isEqualTo(4);
     assertThat(sessionsApi.get(session.id()).data().messages()).hasSize(4);
 
-    var memory = new MemoryApiController(memoryService).get().data();
+    // 记忆自第 30 节起按 Agent 隔离：读法与 `GET /api/v1/agents/{name}/memory` 相同——分区读取也置入 Agent 上下文。
+    // 全局 GET /api/v1/memory 本节移除，故不再经 MemoryApiController（无上下文读的是全局路径，那里此刻本来就是空的）
+    var memory = ToolExecutionContext.callAs(AGENT, memoryService::partition);
     assertThat(memory.core() + memory.archival()).contains("我喜欢喝美式咖啡");
 
     var tools = new ToolApiController(toolRegistry).list().data();

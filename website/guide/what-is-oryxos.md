@@ -46,6 +46,7 @@
 ## 核心特性
 
 - 🤖 **一个目录 = 一个 Agent**：`AGENT.md`（frontmatter 运行配置 + 正文任务指令）定义一个 Agent，不写代码，多 Agent 同实例并存
+- 🔄 **动态管理 Agent，全程免重启**：说一句话生成文件、调一次 API 新建、往 `.oryxos/agents/` 丢一个目录——三条路径同一段注册代码，几秒内出现在列表里并按 cron 自己跑；删除是整目录归档，可追溯
 - ☕ **Java 原生**：JDK 21 + Spring Boot 3.x，单可执行 JAR 部署，无缝复用企业现有 Java 运维工具链（Nacos、Sentinel、SkyWalking、Arthas、Prometheus + Grafana）
 - 🔒 **私有可控**：数据不出企业，不绑任何云；面向严监管行业（银行、政府、电信、能源、医疗）的确定性选择
 - 🛡️ **安全是地基不是补丁**：工具白名单沙箱、凭证不落地走环境变量/企业密钥体系、`tool_invocations` / `llm_calls` 审计表 Day One 落库
@@ -63,4 +64,4 @@
 | **ReAct 循环** | Agent 的推理引擎：LLM 思考 → 调工具 → 看结果 → 再决定，直到给出最终响应；自实现、行为完全可控 |
 | **Memory 记忆** | 会话 + 长期两层记忆，跨对话记住用户偏好、项目背景、关键决策 |
 | **Tool 工具体系** | 内置 **15 个**工具（文件读写编辑、Shell、HTTP、网页搜索与抓取、通知推送、交互提问、长期记忆），Plugin Tool 三档扩展，白名单沙箱强制隔离 |
-| **Web Service** | 15 个 REST 端点统一封装全部能力，任何能发 HTTP 的语言都能接入；同一端口提供管理台（定时任务页可写）与 OpenAPI 文档 |
+| **Web Service** | 27 个 REST 端点统一封装全部能力，任何能发 HTTP 的语言都能接入；同一端口提供管理台（Agent 与定时任务页可写）与 OpenAPI 文档 |

@@ -9,11 +9,16 @@ import io.oryxlabs.oryxos.web.api.ApiResponse;
 import io.oryxlabs.oryxos.web.controller.dto.HealthView;
 import io.oryxlabs.oryxos.web.controller.dto.InfoView;
 import io.oryxlabs.oryxos.web.health.DatabaseHealthProbe;
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.management.ManagementFactory;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -45,8 +50,16 @@ public class SystemApiController {
   /** 读不到构建版本时的兜底字面量（契约 §4.2）。 */
   private static final String UNKNOWN_VERSION = "unknown";
 
+  /** 构建期注入版本的资源路径（与 CLI {@code --version} 同一份源）。 */
+  private static final String VERSION_RESOURCE = "/oryxos-version.properties";
+
+  /** 上述资源里的版本键名。 */
+  private static final String VERSION_PROPERTY = "version";
+
   /** 毫秒 → 秒。 */
   private static final long MILLIS_PER_SECOND = 1000L;
+
+  private static final Logger log = LoggerFactory.getLogger(SystemApiController.class);
 
   private final DatabaseHealthProbe databaseHealthProbe;
   private final ProviderProperties providerProperties;
@@ -118,10 +131,46 @@ public class SystemApiController {
             uptimeSeconds));
   }
 
-  /** 读 JAR 构建注入的版本；测试 / 未打包运行读不到时回 {@code "unknown"}，不伪造。 */
+  /**
+   * 读构建注入的版本；读不到时回 {@code "unknown"}，不伪造。
+   *
+   * <p><b>优先读 {@value #VERSION_RESOURCE}</b>：那是 {@code oryxos-cli} 的 Maven 资源过滤产物，也是 {@code oryxos
+   * --version} 的同一个源。只读 JAR manifest 不够——本仓没有为模块 jar 打开 {@code
+   * addDefaultImplementationEntries}，{@code Package#getImplementationVersion()} 在 fat JAR 里恒为
+   * {@code null}（2026-10-22 管理台「vunknown」的根因）。manifest 保留为第二来源，兼容不带宽扫描资源、只打 manifest 的构建方式。
+   */
   private static String resolveVersion() {
+    String fromResource = readVersionResource();
+    if (fromResource != null) {
+      return fromResource;
+    }
     Package apiPackage = SystemApiController.class.getPackage();
     String version = apiPackage == null ? null : apiPackage.getImplementationVersion();
     return version == null || version.isBlank() ? UNKNOWN_VERSION : version;
+  }
+
+  /**
+   * 读版本资源；不存在或内容为空返回 {@code null}（不是错误——单模块测试的类路径上没有它）。
+   *
+   * <p>日志豁免按第 25 节口径就地注解：格式串与路径实参都是常量，唯一可变实参是本地 {@code Properties.load} 的 IOException 消息（读本地
+   * classpath 资源，不经过网络 / 模型输入）。
+   */
+  @SuppressFBWarnings(
+      value = "CRLF_INJECTION_LOGS",
+      justification = "常量格式串 + 常量路径；异常消息来自本地资源读取，不是不可信输入，就地豁免比全局 exclude 可审计")
+  private static String readVersionResource() {
+    try (InputStream in = SystemApiController.class.getResourceAsStream(VERSION_RESOURCE)) {
+      if (in == null) {
+        return null;
+      }
+      Properties props = new Properties();
+      props.load(in);
+      String version = props.getProperty(VERSION_PROPERTY);
+      return version == null || version.isBlank() ? null : version;
+    } catch (IOException e) {
+      // 资源读失败不致命：退回 manifest 判定，再不行回 unknown；日志留痕但不打断 /info
+      log.debug("读取 {} 失败，退回 JAR manifest：{}", VERSION_RESOURCE, e.getMessage());
+      return null;
+    }
   }
 }

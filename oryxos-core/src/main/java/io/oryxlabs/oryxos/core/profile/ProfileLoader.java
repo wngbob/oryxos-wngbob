@@ -181,6 +181,27 @@ public class ProfileLoader {
   }
 
   /**
+   * 从 {@code AGENT.md} 的<b>文本</b>派生 Profile（第 30 节 FR-004/FR-005）。
+   *
+   * <p><b>落点在本类而不是新建 {@code AgentLoader}</b>：本仓的目录派生器只有这一个（第 29 节裁决
+   * 4），「从文本派生」与「从目录派生」必须走同一段校验——否则「生成草稿能通过校验」与「保存后能注册」会变成两套判据，而前者恰恰是后者的承诺。 故这里只把文本喂给 {@link
+   * #parseAgentMarkdown}，再落到 {@link #toProfile}，一步校验都不重写。
+   *
+   * <p><b>不写临时文件再读</b>：那会引入无谓 IO 与清理责任（失败路径上还得删干净），而解析本身只吃字符串。
+   *
+   * @param agentMarkdown 完整的 {@code AGENT.md} 文本（frontmatter + 正文）
+   * @param agentName Agent 名；<b>不从文本里读</b>——目录名才是 Agent 名的唯一真相源
+   * @throws ProfileLoadException 文本缺 frontmatter、YAML 非法、必填项缺失或厂商未知；消息与目录路径逐字相同
+   */
+  public Profile parse(String agentMarkdown, String agentName) {
+    String text = Objects.requireNonNull(agentMarkdown, "agentMarkdown");
+    if (text.isBlank()) {
+      throw new ProfileLoadException("AGENT.md 内容为空");
+    }
+    return toProfile(agentName, parseAgentMarkdown(text).frontmatter());
+  }
+
+  /**
    * 读取一个 Agent 目录的结构快照：frontmatter / 正文 / 资源清单（第 29 节，契约 runtime-registration §1.2）。
    *
    * <p><b>只做结构解析</b>：不校验 {@code provider} 等语义（那是 {@link #deriveProfile} 的事），也不读取资源内容—— 渐进式披露要求

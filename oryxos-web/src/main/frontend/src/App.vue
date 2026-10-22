@@ -2,7 +2,6 @@
 import { computed, onMounted } from 'vue'
 import logoIcon from './assets/logo-icon.svg'
 import { ROUTES, currentRoute, navigate, startRouter } from './router.js'
-import MemoryView from './views/MemoryView.vue'
 import OverviewView from './views/OverviewView.vue'
 import ProfilesView from './views/ProfilesView.vue'
 import SchedulesView from './views/SchedulesView.vue'
@@ -11,7 +10,7 @@ import StatusView from './views/StatusView.vue'
 import ToolsView from './views/ToolsView.vue'
 
 /**
- * 路由 → 组件。七个页面全部静态引入：一共就七个，省下来的只有麻烦。
+ * 路由 → 组件。六个页面全部静态引入：一共就六个，省下来的只有麻烦。
  *
  * 品牌图标与官网首页同源（`website/public/images/logo-icon.svg` 的逐字副本，
  * 由 `AdminThemeSourceTest` 逐字节比对——改官网不跟这里会红）。
@@ -22,7 +21,6 @@ const VIEWS = {
   '/profiles': ProfilesView,
   '/tools': ToolsView,
   '/schedules': SchedulesView,
-  '/memory': MemoryView,
   '/status': StatusView
 }
 
@@ -59,7 +57,7 @@ onMounted(startRouter)
         </a>
       </nav>
 
-      <footer class="foot">数据全部来自 /api/v1 · 仅定时任务页可写</footer>
+      <footer class="foot">数据全部来自 /api/v1 · 定时任务页与 Agent 详情可写</footer>
     </aside>
 
     <main class="content">

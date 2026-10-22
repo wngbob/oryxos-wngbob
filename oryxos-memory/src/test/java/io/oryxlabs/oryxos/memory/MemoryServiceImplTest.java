@@ -11,6 +11,7 @@ import io.oryxlabs.oryxos.core.engine.PromptBuilder;
 import io.oryxlabs.oryxos.core.profile.Profile;
 import io.oryxlabs.oryxos.core.session.Session;
 import io.oryxlabs.oryxos.core.tool.ToolCatalog;
+import io.oryxlabs.oryxos.core.tool.ToolExecutionContext;
 import io.oryxlabs.oryxos.memory.store.LongTermMemoryStore;
 import io.oryxlabs.oryxos.memory.store.MarkdownMemoryStore;
 import io.oryxlabs.oryxos.memory.store.MemoryCapability;
@@ -170,27 +171,27 @@ class MemoryServiceImplTest {
     // ① 文件压根不存在
     assertThat(serviceOverFreshDir().longTermMemory(profile())).isEmpty();
 
+    // 文件落点自第 30 节起是 per-agent（agents/<name>/MEMORY.md）：下面三份样本都写在那里
+    Path agentMemory = oryxosDir.resolve("agents").resolve("demo").resolve("MEMORY.md");
+
     // ② 文件在、两个 header 都在，但一条记忆也没有（`oryxos init` 刚建出来的样子）
-    Files.createDirectories(oryxosDir.resolve("memory"));
-    Files.writeString(
-        oryxosDir.resolve("memory").resolve("MEMORY.md"),
-        "## 核心记忆\n\n## 归档记忆\n",
-        StandardCharsets.UTF_8);
+    Files.createDirectories(agentMemory.getParent());
+    Files.writeString(agentMemory, "## 核心记忆\n\n## 归档记忆\n", StandardCharsets.UTF_8);
     assertThat(serviceOverFreshDir().longTermMemory(profile())).isEmpty();
 
     // ③ 文件在、但两个 header 都缺——那是人写的笔记，不是记忆
-    Files.writeString(
-        oryxosDir.resolve("memory").resolve("MEMORY.md"),
-        "# 我的笔记\n\n- 随手写的一行\n",
-        StandardCharsets.UTF_8);
+    Files.writeString(agentMemory, "# 我的笔记\n\n- 随手写的一行\n", StandardCharsets.UTF_8);
     assertThat(serviceOverFreshDir().longTermMemory(profile())).isEmpty();
+
+    // ④ 没有 Agent 上下文（profile 为 null）时回退全局 memory/MEMORY.md：那份还不存在 → 同样 empty
+    assertThat(serviceOverFreshDir().longTermMemory(null)).isEmpty();
   }
 
   @Test
   @DisplayName("记过东西后 longTermMemory 非空且含核心区内容")
   void longTermMemoryCarriesCoreSectionOnceSomethingWasRemembered() {
     MemoryService service = serviceOverFreshDir();
-    service.remember("用户叫小王，偏好用 Java", MemoryScope.CORE);
+    rememberAs("demo", service, "用户叫小王，偏好用 Java");
 
     String memory = service.longTermMemory(profile()).orElseThrow();
 
@@ -211,7 +212,7 @@ class MemoryServiceImplTest {
     assertThat(before.get(0)).isInstanceOf(SystemMessage.class);
     assertThat(before.get(1)).isInstanceOf(UserMessage.class);
 
-    service.remember("用户叫小王", MemoryScope.CORE);
+    rememberAs("demo", service, "用户叫小王");
 
     List<Message> instructions = builderOver(service).build(session, profile()).getInstructions();
     assertThat(instructions.get(0)).isInstanceOf(SystemMessage.class);
@@ -228,7 +229,7 @@ class MemoryServiceImplTest {
   @DisplayName("跨会话：换一个全新 Session 组装，长期记忆照旧出现")
   void longTermMemorySurvivesAcrossSessions() {
     MemoryService service = serviceOverFreshDir();
-    service.remember("用户叫小王", MemoryScope.CORE);
+    rememberAs("demo", service, "用户叫小王");
 
     Session another = Session.create("cli:local:demo#2", "cli", "local", "demo");
     another.appendUserMessage("我们以前聊过吗？");
@@ -240,6 +241,23 @@ class MemoryServiceImplTest {
 
   private MemoryService serviceOverFreshDir() {
     return new MemoryServiceImpl(new MarkdownMemoryStore(oryxosDir));
+  }
+
+  /**
+   * 以某个 Agent 的身份写一条记忆——<b>这就是运行时 {@code save_memory} 的处境</b>。
+   *
+   * <p>写入端的 Agent 名不来自门面（{@code remember} 签名里没有 Profile），而来自 {@code ToolExecutor.execute} 在执行工具前
+   * 置入的 {@link ToolExecutionContext}（第 30 节 FR-007 的置入点 ①）。第 30 节前记忆全局单份，裸调 {@code remember} 与
+   * {@code longTermMemory(profile)} 恰好落在同一个文件；改为 per-agent 后，不置入上下文就写全局、读 per-agent，两者对不上。
+   * 故这里按真实调用形态把两步都放进上下文里，而不是放松断言。
+   */
+  private static void rememberAs(String agentName, MemoryService service, String content) {
+    ToolExecutionContext.callAs(
+        agentName,
+        () -> {
+          service.remember(content, MemoryScope.CORE);
+          return null;
+        });
   }
 
   /** 真 {@link PromptBuilder} + 真门面：桩能证明门面守规矩，证明不了接缝在真链路上接得上。 */

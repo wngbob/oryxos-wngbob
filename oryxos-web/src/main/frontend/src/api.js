@@ -1,10 +1,11 @@
 /**
  * 管理台的唯一数据通道（契约 admin-console.md §4）。
  *
- * 只读纪律在 2026-10-20（第 28 节）按课件开了一个**精确的口子**：定时任务页要「立即执行 / 启用停用」，
- * 所以本文件新增 `post` / `put` 两个写助手。可写的动作只有这两个、可写的路径只有
- * `/api/v1/schedules/**`——其余页面与其它资源仍然只读，谁想再开一个写口，必须先把这条约束推翻，
- * 而不是在某个页面里顺手写一个 fetch。`AdminConsoleSourceTest` 逐文件判卷这条边界。
+ * 只读纪律开过两个**精确的口子**，两次都经裁决、都由 `AdminConsoleSourceTest` 逐文件判卷：
+ * 2026-10-20（第 28 节）定时任务页要「立即执行 / 启用停用」→ `post` / `put`，路径限 `/api/v1/schedules/**`；
+ * 2026-10-21（第 30 节）Agent 详情页要「新建 / 保存并生效 / 删文件」→ `del` 与既有的 `post`，路径限
+ * `/api/v1/agents/**` 与 `/api/v1/workspace/file`。其余页面与其它资源仍然只读——谁想再开一个写口，
+ * 必须先把这条约束推翻并在测试里精确登记，而不是在某个页面里顺手写一个 fetch。
  *
  * 响应信封是 `{code, message, data, timestamp}`（裁决 ①），`code` 就是 HTTP 状态码：
  * 所以判定成败看信封本身，不只看 HTTP 200——`code` 非 200 时把 `message` 交给页面显示，
@@ -56,6 +57,16 @@ export async function post(path, body) {
  */
 export async function put(path, body) {
   return send('PUT', path, body)
+}
+
+/**
+ * 发起一次删除请求（第 30 节：只给 Agent 详情页的「删除 Agent」用）。
+ *
+ * @param {string} path 以 /api/v1 开头的路径
+ * @returns {Promise<any>} 信封里的 data
+ */
+export async function del(path) {
+  return send('DELETE', path)
 }
 
 /**

@@ -100,7 +100,7 @@ class ScheduledTaskE2ETest {
 
   @Test
   @DisplayName("登记 → 立即执行 → 状态与历史落库 → 记忆可查 → 停用")
-  void scheduledTaskLifecycleOverHttp() throws SQLException {
+  void scheduledTaskLifecycleOverHttp() throws SQLException, IOException {
     agentScheduler.registerAll();
 
     // ② 启动即登记：一条任务、未跑过、启用、下次触发在未来
@@ -132,8 +132,12 @@ class ScheduledTaskE2ETest {
     assertThat(executions.get(0).path("sessionId").asText()).isEqualTo(SCHEDULE_SESSION);
     assertThat(executions.get(0).path("errorMessage").isNull()).isTrue();
 
-    JsonNode memory = getData("/api/v1/memory");
-    assertThat(memory.path("core").asText() + memory.path("archival").asText()).contains(MESSAGE);
+    // 记忆自第 30 节起按 Agent 隔离（agents/<name>/MEMORY.md），全局 GET /api/v1/memory 同时移除：
+    // 这里直接看磁盘——钟推跑在 Agent 上下文里，记忆必须落进该 Agent 自己那一份，而不是全局单份
+    String memoryFile =
+        Files.readString(
+            ROOT.resolve("agents").resolve(AGENT).resolve("MEMORY.md"), StandardCharsets.UTF_8);
+    assertThat(memoryFile).contains(MESSAGE);
 
     // 字段级对账：任务行状态滚对、历史行一条成功、会话复用同一身份
     assertThat(

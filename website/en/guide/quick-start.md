@@ -23,7 +23,7 @@ java -jar oryxos-boot/target/oryxos.jar profile create my-assistant
 export DEEPSEEK_API_KEY=sk-...
 java -jar oryxos-boot/target/oryxos.jar chat
 
-# Or run resident: REST API + admin console (schedules page can write) + OpenAPI docs, one process, one port
+# Or run resident: REST API + admin console (Agent & schedules pages can write) + OpenAPI docs, one process, one port
 java -jar oryxos-boot/target/oryxos.jar serve
 #   REST      http://localhost:8080/api/v1
 #   Admin     http://localhost:8080/admin/

@@ -46,6 +46,7 @@ In one sentence: frameworks give you materials to build your own house; orchestr
 ## Key Features
 
 - 🤖 **One directory = one Agent**: `AGENT.md` (frontmatter runtime config + body task instructions) defines an Agent. No code. Multiple Agents coexist in one instance
+- 🔄 **Manage Agents dynamically, no restart**: describe it in one sentence, create it with one API call, or drop a directory into `.oryxos/agents/` — all three share one registration path; the Agent shows up in seconds and runs on its cron. Deleting archives the whole directory instead of destroying it
 - ☕ **Java-native**: JDK 21 + Spring Boot 3.x, single executable JAR, seamlessly reusing enterprise Java ops tooling (Nacos, Sentinel, SkyWalking, Arthas, Prometheus + Grafana)
 - 🔒 **Private and controllable**: data never leaves the enterprise, no cloud binding — the deterministic choice for heavily regulated industries (banking, government, telecom, energy, healthcare)
 - 🛡️ **Security as foundation, not patch**: tool whitelist sandbox, credentials via env vars / enterprise key systems, `tool_invocations` / `llm_calls` audit tables persisted from day one
@@ -63,4 +64,4 @@ In one sentence: frameworks give you materials to build your own house; orchestr
 | **ReAct Loop** | The Agent's reasoning engine: LLM thinks → calls tool → observes result → decides again, until a final response. Self-implemented, fully controllable |
 | **Memory** | Session + long-term memory, remembering user preferences, project context and key decisions across conversations |
 | **Tool System** | **15** built-in tools (file read/write/edit, shell, HTTP, web search and fetch, notifications, user interaction, long-term memory), Plugin Tool three-tier extension, whitelist sandbox |
-| **Web Service** | 15 REST endpoints wrap every capability — any language that speaks HTTP can integrate; an admin console (the schedules page can write) and OpenAPI docs are served on the same port |
+| **Web Service** | 27 REST endpoints wrap every capability — any language that speaks HTTP can integrate; an admin console (the Agent and schedules pages can write) and OpenAPI docs are served on the same port |

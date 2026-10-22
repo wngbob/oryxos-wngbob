@@ -73,6 +73,18 @@ class SchedulerAssemblyTest {
     assertThat(read(CLI_MAIN + "CliAssemblyConfiguration.java")).doesNotContain(".registerAll()");
   }
 
+  @Test
+  @DisplayName("实时监听只在常驻命令（serve / gateway）启动，chat 与装配处都不碰它（FR-003）")
+  void workspaceWatcher_startsOnlyInResidentCommands() {
+    // 断言调用形态而非单词 `.start(`：那条字符串在别处也会出现（线程、WatchService 自身），断它等于不断
+    String startCall = ".getBean(WorkspaceWatcher.class).start()";
+    assertThat(read(CLI_MAIN + "command/ServeCommand.java")).contains(startCall);
+    assertThat(read(CLI_MAIN + "command/GatewayCommand.java")).contains(startCall);
+    assertThat(read(CLI_MAIN + "command/ChatCommand.java")).doesNotContain("WorkspaceWatcher");
+    // 装配处只造对象：在这里 start 一次，等于每个重命令都带上监听线程
+    assertThat(read(CLI_MAIN + "CliAssemblyConfiguration.java")).doesNotContain(startCall);
+  }
+
   private static String read(String relativePath) {
     Path file = repoRoot().resolve(relativePath);
     if (!Files.isRegularFile(file)) {

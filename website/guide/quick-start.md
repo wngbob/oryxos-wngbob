@@ -23,7 +23,7 @@ java -jar oryxos-boot/target/oryxos.jar profile create my-assistant
 export DEEPSEEK_API_KEY=sk-...
 java -jar oryxos-boot/target/oryxos.jar chat
 
-# 或常驻：REST API + 管理台（定时任务页可写）+ OpenAPI 文档，同一个进程、同一个端口
+# 或常驻：REST API + 管理台（Agent 与定时任务页可写）+ OpenAPI 文档，同一个进程、同一个端口
 java -jar oryxos-boot/target/oryxos.jar serve
 #   REST      http://localhost:8080/api/v1
 #   管理台    http://localhost:8080/admin/

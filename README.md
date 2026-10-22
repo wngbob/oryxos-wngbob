@@ -59,6 +59,7 @@ OryxOS 是企业私有部署的 **Agent 操作系统**：装在企业自己的 K
 ## 核心特性
 
 - 🤖 **一个目录 = 一个 Agent**：`AGENT.md`（frontmatter 运行配置 + 正文任务指令）定义一个 Agent，不写代码，多 Agent 同实例并存
+- 🔄 **动态管理 Agent，全程免重启**：说一句话生成文件、调一次 API 新建、往 `.oryxos/agents/` 丢一个目录——三条路径同一段注册代码，几秒内出现在列表里并按 cron 自己跑；删除是整目录归档，可追溯
 - ☕ **Java 原生**：JDK 21 + Spring Boot 3.x，单可执行 JAR 部署，无缝复用企业现有 Java 运维工具链（Nacos、Sentinel、SkyWalking、Arthas、Prometheus + Grafana）
 - 🔒 **私有可控**：数据不出企业，不绑任何云；面向严监管行业（银行、政府、电信、能源、医疗）的确定性选择
 - 🛡️ **安全是地基不是补丁**：工具白名单沙箱、凭证不落地走环境变量/企业密钥体系、`tool_invocations` / `llm_calls` 审计表 Day One 落库
@@ -68,7 +69,7 @@ OryxOS 是企业私有部署的 **Agent 操作系统**：装在企业自己的 K
 - 💾 **跨对话记忆**：会话记忆 + 长期记忆两层（`MEMORY.md`），接口预留向量检索升级空间
 - 🌐 **无状态可扩展**：实例无状态、状态外置，从架构第一天为分布式留好路
 - ⏰ **三种触发源，一条链路**：CLI 与 REST API（人推）、cron 定时任务（钟推）汇入同一个 `AgentService`，引擎不感知消息来源
-- 📊 **开箱即用的管理台**：`/admin/` 下七页运行时视图（概览、会话、Agent、工具、定时任务、长期记忆、运行状态），与 REST 端点同端口；除定时任务页的「立即执行 / 启用停用」外均为只读
+- 📊 **开箱即用的管理台**：`/admin/` 下六页运行时视图（概览、会话、Agent、工具、定时任务、运行状态），与 REST 端点同端口；Agent 详情页（新建 / 生成文件 / 编辑文件 / 固定会话 / 专属记忆）与定时任务页可写，其余只读
 
 ## 五大核心能力
 
@@ -78,7 +79,7 @@ OryxOS 是企业私有部署的 **Agent 操作系统**：装在企业自己的 K
 | **ReAct 循环** | Agent 的推理引擎：LLM 思考 → 调工具 → 看结果 → 再决定，直到给出最终响应；自实现、行为完全可控 |
 | **Memory 记忆** | 会话 + 长期两层记忆，跨对话记住用户偏好、项目背景、关键决策 |
 | **Tool 工具体系** | 内置 **15 个**工具（文件读写编辑、Shell、HTTP、网页搜索与抓取、通知推送、交互提问、长期记忆），Plugin Tool 三档扩展，白名单沙箱强制隔离 |
-| **Web Service** | 15 个 REST 端点统一封装全部能力，任何能发 HTTP 的语言都能接入；同一端口提供管理台（定时任务页可写）与 OpenAPI 文档 |
+| **Web Service** | 27 个 REST 端点统一封装全部能力，任何能发 HTTP 的语言都能接入；同一端口提供管理台（Agent 与定时任务页可写）与 OpenAPI 文档 |
 
 ## 架构
 
@@ -95,12 +96,12 @@ OryxOS 是企业私有部署的 **Agent 操作系统**：装在企业自己的 K
 
 | 模块 | 职责 |
 |------|------|
-| `oryxos-core` | 核心抽象与引擎：`OryxTool`、`Session`、`Profile`、`ProfileLoader`（目录解析 / Profile 派生）、`ContextLoader`、`ReActLoop`、`PromptBuilder`、`ToolExecutor`、`AgentService`、`AgentScheduler` |
+| `oryxos-core` | 核心抽象与引擎：`OryxTool`、`Session`、`Profile`、`ProfileLoader`（目录解析 / Profile 派生）、`ContextLoader`、`ReActLoop`、`PromptBuilder`、`ToolExecutor`、`AgentService`、`AgentScheduler`、`AgentLifecycleService`（Agent 增删改与热注册）、`WorkspaceWatcher`（目录实时监听） |
 | `oryxos-provider` | 能力一「对接 LLM」：`ProviderService`、Function Calling 适配、provider name 显式映射 |
 | `oryxos-memory` | 能力三「Memory」：`MemoryService` 三层门面、长期记忆三档后端（Markdown 默认 / SQLite / Mem0）、`MemoryTools` |
 | `oryxos-tool` | 能力四「Tool」：15 个内置工具（文件读写编辑、内容与路径检索、Shell、HTTP、网页搜索与抓取、通知、交互、长期记忆）、`ToolRegistry`、`AnnotatedToolAdapter`、`McpClientService`、`SearchProvider` 两档实现、`Sandbox` 接口 + `WhitelistSandbox` |
 | `oryxos-channel-cli` | CLI Channel：`CliChannel`、`oryxos chat` |
-| `oryxos-web` | 能力五「Web Service」：15 个 REST 端点、7 个 `ApiController`、统一响应信封、管理台（7 页，仅定时任务页可写）、OpenAPI |
+| `oryxos-web` | 能力五「Web Service」：27 个 REST 端点、7 个 `ApiController`、统一响应信封、管理台（6 页，Agent 详情与定时任务页可写）、OpenAPI |
 | `oryxos-storage` | SQLite 持久化：Session、审计、记忆与通知渠道 Repository |
 | `oryxos-cli` | `OryxOsCli` 主入口、15 个子命令、`ConfigLoader` |
 | `oryxos-boot` | Spring Boot 启动模块、自动配置、依赖聚合；fat JAR `oryxos-boot/target/oryxos.jar`（主类 `OryxOsCli`） |
@@ -137,7 +138,7 @@ java -jar oryxos-boot/target/oryxos.jar profile create my-assistant
 export DEEPSEEK_API_KEY=sk-...
 java -jar oryxos-boot/target/oryxos.jar chat
 
-# 常驻模式：REST API + 管理台（定时任务页可写）+ OpenAPI，同一个进程同一个端口
+# 常驻模式：REST API + 管理台（Agent 与定时任务页可写）+ OpenAPI，同一个进程同一个端口
 java -jar oryxos-boot/target/oryxos.jar serve
 #   REST       http://localhost:8080/api/v1
 #   管理台     http://localhost:8080/admin/
@@ -163,13 +164,15 @@ cp -a examples/agents/daily-reconcile .oryxos/agents/
 java -jar oryxos-boot/target/oryxos.jar profile list   # daily-reconcile 应出现在列表里
 ```
 
-REST 端点共 **15 个**，全部落在 `/api/v1` 下，统一响应信封 `{code, message, data, timestamp}`：
+REST 端点共 **27 个**，全部落在 `/api/v1` 下，统一响应信封 `{code, message, data, timestamp}`：
 
 | 类别 | 端点 |
 |------|------|
 | 会话管理 | `POST /api/v1/sessions`（创建或取回）、`GET /api/v1/sessions`（最近 100 条摘要，可按 `status` 过滤）、`POST /api/v1/sessions/{id}/messages`（发消息）、`GET /api/v1/sessions/{id}`（查历史）、`DELETE /api/v1/sessions/{id}`（归档） |
-| Agent 调用 | `POST /api/v1/agents/{name}/invoke`（无状态调用） |
-| 信息查询 | `GET /api/v1/profiles`、`GET /api/v1/memory`、`GET /api/v1/tools` |
+| Agent 管理 | `POST /api/v1/agents`（新建）、`GET /api/v1/agents`（列表）、`GET /api/v1/agents/{name}`（详情）、`PUT /api/v1/agents/{name}`（覆写 `AGENT.md`，即时生效）、`DELETE /api/v1/agents/{name}`（归档）、`POST /api/v1/agents/{name}/generate-files`（一句话生成草稿）、`POST /api/v1/agents/{name}/files`（保存一组文件） |
+| Agent 调用 | `POST /api/v1/agents/{name}/invoke`（无状态调用）、`GET /api/v1/agents/{name}/memory`（专属长期记忆）、`GET /api/v1/agents/{name}/session`（固定管理台会话）、`POST /api/v1/agents/{name}/session/messages`（向固定会话发消息） |
+| 工作区 | `GET /api/v1/workspace/tree`（目录树）、`GET /api/v1/workspace/file?path=`（读文本）、`POST /api/v1/workspace/file`（写文本） |
+| 信息查询 | `GET /api/v1/profiles`、`GET /api/v1/tools` |
 | 定时任务 | `GET /api/v1/schedules`（列表与运行状态）、`GET /api/v1/schedules/{id}/executions`（执行历史）、`POST /api/v1/schedules/{id}/run`（立即执行）、`PUT /api/v1/schedules/{id}`（启用 / 停用） |
 | 系统状态 | `GET /api/v1/health`、`GET /api/v1/info` |
 
@@ -210,7 +213,7 @@ java -jar oryxos-boot/target/oryxos.jar chat --profile mock-demo
 # 输入：记住：我喜欢喝美式咖啡
 # 答复：好的，我记住了。
 
-cat .oryxos/memory/MEMORY.md            # 事实真的写进了长期记忆
+cat .oryxos/agents/mock-demo/MEMORY.md  # 事实真的写进了这个 Agent 的长期记忆（第 30 节起按 Agent 隔离）
 java -jar oryxos-boot/target/oryxos.jar serve
 # 打开 http://localhost:8080/admin/ ：概览里有会话数与工具数，「会话」页能看到这一条
 ```
@@ -234,7 +237,7 @@ schedules: [{ cron: "0 0 8 * * *", message: "查一下今天天气并生成穿�
 
 ## 项目状态
 
-**当前阶段：运行时内核已跑通。** 五大核心能力（第 16~26 节）全部交付，`mvn clean verify` 全绿（**578** 条测试）；目前在做跨节串联验收与三个验收 Demo。
+**当前阶段：运行时内核已跑通。** 五大核心能力（第 16~26 节）全部交付，动态 Agent 管理（第 30 节）接上，`mvn clean verify` 全绿（**723** 条测试）；目前在做跨节串联验收与三个验收 Demo。
 
 - [x] 业界调研 / 需求文档 / 技术方案 / AI 编程指南
 - [x] Spec-Kit 开发工作流搭建
@@ -247,7 +250,7 @@ schedules: [{ cron: "0 0 8 * * *", message: "查一下今天天气并生成穿�
 - [x] 能力三：Memory（门面 + Markdown / SQLite / Mem0 三档长期记忆后端）
 - [x] Sandbox 白名单（文件路径 / Shell 命令 / HTTP 域名）
 - [x] 定时任务（第三触发源，与 CLI / Web 共用同一条链路）
-- [x] 能力五：Web Service（15 个 REST 端点）+ 管理台（7 页，仅定时任务页可写）
+- [x] 能力五：Web Service（27 个 REST 端点）+ 管理台（6 页，Agent 详情与定时任务页可写）
 - [x] 跨节串联验收（第 27 节）
 - [x] 定时任务子系统（状态与历史落 SQLite、四个管理端点、跨重启恢复、多 Agent 隔离）
 - [ ] 三个验收 Demo：每日天气 / 每日科技日报 / 每日 GitHub 日报

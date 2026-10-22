@@ -10,6 +10,7 @@ import io.oryxlabs.oryxos.web.controller.dto.ScheduleView;
 import io.oryxlabs.oryxos.web.controller.dto.UpdateScheduleRequest;
 import io.oryxlabs.oryxos.web.error.ScheduleNotFoundException;
 import java.util.List;
+import java.util.Set;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -56,13 +57,22 @@ public class ScheduleApiController {
   }
 
   /**
-   * 列出全部已登记任务及其运行状态。
+   * 列出当前<b>已注册</b>的定时任务及其运行状态。
    *
-   * @return 按任务标识升序的任务视图
+   * <p><b>为什么不直接透出 {@code taskStore.list()}</b>：库里的行可能比注册表多——Agent 被删除、或 schedule 已从 {@code
+   * AGENT.md} 移除后，旧行仍在 {@code scheduled_tasks} 里。那些任务已经没有定义，列出来就会引导用户去点一个必然 404 的「立即执行」；定义源始终是
+   * {@code AGENT.md}，注册表是它在本进程里的投影。
+   *
+   * @return 按任务标识升序的已注册任务视图
    */
   @GetMapping
   public ApiResponse<List<ScheduleView>> list() {
-    return ApiResponse.ok(taskStore.list().stream().map(ScheduleView::from).toList());
+    Set<String> registered = agentScheduler.registeredTaskIds();
+    return ApiResponse.ok(
+        taskStore.list().stream()
+            .filter(task -> registered.contains(task.taskId()))
+            .map(ScheduleView::from)
+            .toList());
   }
 
   /**
@@ -115,12 +125,20 @@ public class ScheduleApiController {
   }
 
   /**
-   * 取任务视图，不存在即 404。
+   * 取任务视图；<b>库里没有、或只剩历史行（当前未注册）</b>一律 404。
+   *
+   * <p>「存在」的口径与 {@link #list()} 一致：只有定义仍在 {@code AGENT.md} 里、且本进程已成功登记的任务才算存在。
    *
    * @param id 任务标识
    * @return 任务视图
    */
   private ScheduledTaskView requireTask(String id) {
-    return taskStore.find(id).orElseThrow(() -> new ScheduleNotFoundException(id));
+    ScheduledTaskView task =
+        taskStore.find(id).orElseThrow(() -> new ScheduleNotFoundException(id));
+    if (!agentScheduler.registeredTaskIds().contains(id)) {
+      // 库里有行、注册表里没有：Agent 已删除或 schedule 已从 AGENT.md 移除，历史行只留在库里
+      throw new ScheduleNotFoundException(id);
+    }
+    return task;
   }
 }

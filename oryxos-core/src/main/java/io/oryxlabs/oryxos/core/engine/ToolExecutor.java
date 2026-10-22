@@ -1,7 +1,9 @@
 package io.oryxlabs.oryxos.core.engine;
 
+import io.oryxlabs.oryxos.core.profile.Profile;
 import io.oryxlabs.oryxos.core.tool.OryxTool;
 import io.oryxlabs.oryxos.core.tool.ToolCatalog;
+import io.oryxlabs.oryxos.core.tool.ToolExecutionContext;
 import io.oryxlabs.oryxos.core.tool.ToolResult;
 import io.oryxlabs.oryxos.storage.entity.ToolInvocation;
 import io.oryxlabs.oryxos.storage.repository.ToolInvocationRepository;
@@ -72,7 +74,7 @@ public class ToolExecutor {
       return ToolResult.failure(reason);
     }
     try {
-      ToolResult result = tool.get().execute(call.arguments());
+      ToolResult result = executeWithAgentContext(tool.get(), call.arguments());
       record(
           sessionId,
           call,
@@ -87,6 +89,22 @@ public class ToolExecutor {
       record(sessionId, call, false, null, reason, startedAt);
       return ToolResult.failure(reason);
     }
+  }
+
+  /**
+   * 在「当前 Agent = 本次处理的 Agent」的上下文里执行工具（第 30 节 FR-007）。
+   *
+   * <p><b>Agent 名取自 {@link ProfileContext}</b>，不新增参数：{@code AgentService.process} 入口已经置好、{@code
+   * finally} 清；{@code OryxTool.execute} 的签名因此一字不改。拿不到时（例如某个测试直接调 {@link #execute}）传 {@code
+   * null}，工具侧据此走无 Agent 的兜底路径。
+   *
+   * <p><b>工具看不到「谁在调它」，只知道「它在替谁干活」</b>：本类不做任何按 Agent 的过滤（那是 {@code ToolCatalog.availableFor} 的事），
+   * 只把身份透传下去，让记忆这类按 Agent 分区的工具能找到自己的落点。
+   */
+  private static ToolResult executeWithAgentContext(OryxTool tool, String arguments) {
+    Profile current = ProfileContext.current();
+    String agentName = current == null ? null : current.name();
+    return ToolExecutionContext.callAs(agentName, () -> tool.execute(arguments));
   }
 
   /** 落一条审计 + 一条结构化日志。成败两条路径都走这里，保证覆盖率恒为 100%。 */

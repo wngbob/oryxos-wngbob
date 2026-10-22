@@ -214,6 +214,22 @@ public class AgentScheduler {
   }
 
   /**
+   * 注销某个 Agent 名下的全部定时任务（第 30 节：删除 / 更新 Agent 时先停定时）。
+   *
+   * <p><b>与 {@link #registerProfile} 开头的取消是同一段逻辑</b>，只是把它提成公开入口——删除 Agent
+   * 时没有「接着注册新的」这一步，但要求完全相同的归属判定与两表清理。 两处各写一遍的话，第 29 节修过的那类归属 bug 迟早会在其中一处复活。
+   *
+   * <p><b>取消用 {@code cancel(false)}</b>：正在跑的那一次不打断，让它跑完（FR-001 的删除语义——停的是「以后不再触发」）。 <b>不触碰 {@code
+   * taskLocks}</b>：锁表的生命周期与任务句柄无关，动它会让正在跑的那一次在 {@code finally} 里 unlock 一个已被移除的锁。
+   *
+   * @param profile 要注销的 Agent；按 {@link Profile#name()} 精确匹配归属
+   */
+  public void unregisterProfile(Profile profile) {
+    Objects.requireNonNull(profile, "profile");
+    cancelTasksOf(profile.name());
+  }
+
+  /**
    * 取消某个 Agent 名下的全部既有任务：句柄 {@code cancel(false)}，并从句柄表与已注册索引里移除。
    *
    * <p><b>归属按 {@link RegisteredTask#profile()} 判，不按 {@code <Agent>#} 前缀判</b>：目录名允许含 {@code
@@ -246,6 +262,21 @@ public class AgentScheduler {
    */
   Map<String, ScheduledFuture<?>> scheduledTaskHandles() {
     return Map.copyOf(scheduledTasks);
+  }
+
+  /**
+   * 当前已注册的任务标识快照。
+   *
+   * <p><b>语义</b>：这些任务的定义此刻仍在 {@code AGENT.md} 里、且本进程已成功登记。管理端用它过滤 {@code scheduled_tasks}
+   * 里的历史行——Agent 被删除或 schedule 从 {@code AGENT.md} 移除后，库里会留下旧行（第 28 节 v1 没有 {@code retired}
+   * 字段），那些任务已无定义，不应再出现在列表里。
+   *
+   * <p>返回不可变副本：容器可能在监听线程里被改（{@code WorkspaceWatcher} 拾取目录删除），调用方遍历时不能看到半截状态。
+   *
+   * @return 已注册任务标识的快照
+   */
+  public Set<String> registeredTaskIds() {
+    return Set.copyOf(registeredTasks.keySet());
   }
 
   /**

@@ -34,9 +34,15 @@ import picocli.CommandLine.Command;
     description = "在当前目录创建工作区 .oryxos/（幂等：已存在的目录与文件一律不覆盖）")
 public final class InitCommand implements Runnable {
 
-  /** 工作区子目录，顺序即输出顺序。 */
+  /**
+   * 工作区子目录，顺序即输出顺序。
+   *
+   * <p>{@code archive} 是第 30 节新增：删除 Agent
+   * 时整目录移进去，不物理删。预先建出来是为了让「删了以后去哪儿找」在第一次删除之前就有个看得见的落点；老工作区没有它也照常能删—— {@code AgentStore.archive}
+   * 会懒建（{@code Files.createDirectories}）。
+   */
   private static final List<String> DIRECTORIES =
-      List.of("agents", "skills", "memory", "sessions", "logs", "output");
+      List.of("agents", "skills", "memory", "sessions", "logs", "output", "archive");
 
   /**
    * 长期记忆文件模板：两个一级分区标题（contracts/agent-directory.md §6）。

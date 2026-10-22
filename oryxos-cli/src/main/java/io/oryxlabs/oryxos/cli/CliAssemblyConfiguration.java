@@ -3,6 +3,9 @@ package io.oryxlabs.oryxos.cli;
 import io.oryxlabs.oryxos.channel.cli.CliChannel;
 import io.oryxlabs.oryxos.cli.workspace.AgentResolver;
 import io.oryxlabs.oryxos.cli.workspace.Workspace;
+import io.oryxlabs.oryxos.core.agent.AgentLifecycleService;
+import io.oryxlabs.oryxos.core.agent.AgentStore;
+import io.oryxlabs.oryxos.core.agent.WorkspaceWatcher;
 import io.oryxlabs.oryxos.core.context.ContextLoader;
 import io.oryxlabs.oryxos.core.engine.AgentService;
 import io.oryxlabs.oryxos.core.engine.PromptBuilder;
@@ -104,6 +107,43 @@ public class CliAssemblyConfiguration {
   @Bean
   public Workspace workspace() {
     return Workspace.current();
+  }
+
+  /**
+   * Agent 目录的磁盘读写收口（第 30 节）。
+   *
+   * <p><b>传 {@code workspace.root()} 而不是 {@code agentsDir()}</b>：{@code root()} 已经是 {@code
+   * <基准>/.oryxos}， 而本类还要管 {@code archive/}（删除 = 归档）与文件浏览器要的相对路径守卫——两处都以工作区根为坐标系。传 {@code
+   * agentsDir()} 会让归档目录跑到 {@code .oryxos/agents/archive}，那是第二个真相源。
+   *
+   * <p><b>core MUST NOT 自己 {@code Workspace.current()}</b>：{@code Workspace} 是 {@code oryxos-cli}
+   * 的类型，core 反向依赖 cli 就成环了。这与 {@link #contextLoader} 传 {@code workspace.root()} 是同一条口径。
+   *
+   * @param workspace 工作区
+   * @return Agent 目录存取器，根为 {@code .oryxos}
+   */
+  @Bean
+  public AgentStore agentStore(Workspace workspace) {
+    return new AgentStore(workspace.root());
+  }
+
+  /**
+   * 已配置厂商名清单（第 30 节）：{@code oryxos.providers[].name} 的名字部分。
+   *
+   * <p><b>为什么要从 {@link ProviderProperties} 取而不是照抄 {@code SUPPORTED_PROVIDERS}</b>：{@code
+   * SUPPORTED_PROVIDERS} 是「代码实现了哪几家」（编译期常量），本清单是「这个实例真连得上哪几家」（配置事实）。创建 Agent 时填一个本实例连不上的厂商名，
+   * 要等到它第一次被调用才炸——那正是 FR-011 要拦在前面的错误。
+   *
+   * <p><b>清单为空不在这里报错</b>：测试上下文与「只跑轻命令」的部署都可能没有 {@code oryxos.providers}（空清单能过 {@code
+   * ProviderProperties.validate()}）。空清单的错误形态推给真正需要它的调用点——{@code generate-files} 回 503、 {@code
+   * create} 回 400，两处都能给出比「启动失败」更贴近操作的消息。
+   *
+   * @param properties 全局层配置
+   * @return 不可变的厂商名清单，顺序与配置文件一致；可能为空
+   */
+  @Bean
+  public List<String> configuredProviders(ProviderProperties properties) {
+    return properties.providers().stream().map(ProviderProperties.ProviderEntry::name).toList();
   }
 
   /**
@@ -746,6 +786,79 @@ public class CliAssemblyConfiguration {
       ScheduledTaskStore scheduledTaskStore) {
     return new AgentScheduler(
         taskScheduler, profileRegistry, agentService, sessionService, scheduledTaskStore);
+  }
+
+  /**
+   * 实时监听 {@code agents/}（第 30 节 FR-003）。
+   *
+   * <p><b>只造对象、不启动</b>：与 {@link #agentScheduler} 同一条裁决——「起上下文即启动」会让 {@code chat} 也带上一条监听线程。 {@code
+   * start()} 由 {@code serve} / {@code gateway} 的命令体显式调用。
+   *
+   * <p><b>监听目录是 {@code <oryxos>/agents}</b>：<b>不是</b> {@code
+   * workspace.root().resolve(".oryxos")}——{@code Workspace.root()} 已经是的 {@code .oryxos}
+   * 本身，再叠一层会监听一个永远为空的目录（第 29 节同一类错误）。
+   *
+   * @param lifecycleService 目录事件的唯一落点（与 API 创建同一个 {@code register}）
+   * @param workspace 工作区（取其 {@code root()}，已是 {@code .oryxos}）
+   * @return 尚未启动的监听器
+   */
+  @Bean
+  public WorkspaceWatcher workspaceWatcher(
+      AgentLifecycleService lifecycleService, Workspace workspace) {
+    return new WorkspaceWatcher(lifecycleService, workspace.root().resolve("agents"));
+  }
+
+  /**
+   * Agent 生命周期的编排点（第 30 节）。
+   *
+   * <p><b>作者配置在这里解析，不落一个中间类型</b>（data-model.md §3.2）：{@code oryxos.author.provider} 留空就取已配置清单第一个，
+   * {@code oryxos.author.model} 原样传下去（留空 = 生成端点 503）。一个只有两个字符串的 {@code record} 不会比这两个参数更有信息量。
+   *
+   * <p><b>厂商清单为空不在这里报错</b>：测试上下文与「只跑轻命令」的部署都可能没有 {@code oryxos.providers}，
+   * 而重命令的装配阶段不该替它们判死刑。空清单的错误形态推给真正需要它的调用点——{@code create} 回 400、{@code generate-files} 回
+   * 503，两处都能给出比「上下文起不来」更贴近操作的消息（与 {@link #configuredProviders} 同一条口径）。
+   *
+   * <p><b>{@code @Qualifier("configuredProviders")} 不能省</b>：方法参数类型是 {@code List<String>}，Spring
+   * 对集合类型默认按 「收集容器里该元素类型的 Bean」解析——不加限定就永远拿到空表，创建 Agent 时所有厂商都会被判成未知。
+   *
+   * @param profileLoader 目录 → Profile（与启动扫描同一套校验）
+   * @param profileRegistry 运行时可变的 Agent 索引
+   * @param agentScheduler 定时任务注册 / 注销
+   * @param agentStore 工作区磁盘读写
+   * @param llmClient 一句话生成用的模型接缝（容器里唯一实现是 {@link #providerService}）
+   * @param toolCatalog 校验 {@code tools} 是否已注册
+   * @param sessionService 固定会话的取或建
+   * @param agentService 固定会话的发消息入口
+   * @param configuredProviders 已配置厂商名清单
+   * @param authorProvider {@code oryxos.author.provider}；留空取清单第一个
+   * @param authorModel {@code oryxos.author.model}；留空则生成端点 503
+   * @return 生命周期服务
+   */
+  @Bean
+  public AgentLifecycleService agentLifecycleService(
+      ProfileLoader profileLoader,
+      ProfileRegistry profileRegistry,
+      AgentScheduler agentScheduler,
+      AgentStore agentStore,
+      LlmClient llmClient,
+      ToolCatalog toolCatalog,
+      SessionService sessionService,
+      AgentService agentService,
+      @Qualifier("configuredProviders") List<String> configuredProviders,
+      @Value("${oryxos.author.provider:}") String authorProvider,
+      @Value("${oryxos.author.model:}") String authorModel) {
+    return new AgentLifecycleService(
+        profileLoader,
+        profileRegistry,
+        agentScheduler,
+        agentStore,
+        llmClient,
+        toolCatalog,
+        sessionService,
+        agentService,
+        configuredProviders,
+        authorProvider,
+        authorModel);
   }
 
   /**

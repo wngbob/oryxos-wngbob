@@ -1,5 +1,6 @@
 package io.oryxlabs.oryxos.memory.store;
 
+import io.oryxlabs.oryxos.core.tool.ToolExecutionContext;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -12,7 +13,11 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * 默认档：长期记忆落在工作区的一个 Markdown 文件里（{@code <oryxosDir>/memory/MEMORY.md}）。
+ * 默认档：长期记忆落在工作区的一个 Markdown 文件里。
+ *
+ * <p><b>两个可能的落点</b>（第 30 节 FR-007）：有 Agent 上下文（{@link ToolExecutionContext#current()} 非空）时是 {@code
+ * <oryxosDir>/agents/<name>/MEMORY.md}，没有上下文时回退全局的 {@code <oryxosDir>/memory/MEMORY.md}（第 22
+ * 节的原始行为）。 路径<b>每次调用重新解析</b>，不在字段里缓存。
  *
  * <p><b>为什么这是默认档</b>：零依赖、人可直接读改、能被 git 跟踪。记忆在核心阶段是「几十条自己写进去的事」，不是「几百万条日志」—— 一个文件扛得住，而且出问题时用眼睛就能看出
  * Agent 到底记住了什么。
@@ -23,8 +28,8 @@ import java.util.Locale;
  * <p><b>不缓存</b>：{@code load()} / {@code recallByKeyword()} 每次都重新读文件。进程内任何一层缓存都会让「Agent 刚记完、下一轮看不见」，
  * 而这正是记忆最容易被用错的地方。
  *
- * <p><b>IO 不过 {@code Sandbox.enforce}</b>：文件路径由本类在构造时定死（工作区根下 {@code memory/MEMORY.md}），模型无法把它指向别处，
- * 不构成越界面。技术方案 §6.7 点名的沙箱范围只有 FileTools / ShellTools / HttpTools。
+ * <p><b>IO 不过 {@code Sandbox.enforce}</b>：两个落点都由本类按工作区根 + Agent 名拼出，模型无法把路径指向别处，不构成越界面。 技术方案 §6.7
+ * 点名的沙箱范围只有 FileTools / ShellTools / HttpTools。
  */
 public class MarkdownMemoryStore implements LongTermMemoryStore {
 
@@ -45,19 +50,39 @@ public class MarkdownMemoryStore implements LongTermMemoryStore {
    */
   static final int MAX_ARCHIVE_CHARS = 4000;
 
-  /** 记忆所在目录，构造时定死。 */
-  private final Path memoryDir;
+  /** Agent 子目录名：per-agent 记忆落在 {@code agents/<name>/MEMORY.md}（第 30 节 FR-007）。 */
+  private static final String AGENTS_DIR = "agents";
 
-  /** 记忆文件路径，构造时定死。 */
-  private final Path memoryFile;
+  /** 记忆文件名：全局档与 per-agent 档同名。 */
+  private static final String MEMORY_FILE = "MEMORY.md";
+
+  /** 工作区目录（即 {@code .oryxos} 本身），构造时定死。 */
+  private final Path oryxosDir;
 
   /**
-   * @param oryxosDir 工作区目录（即 {@code .oryxos} 本身），本档只认它下面的 {@code memory/MEMORY.md}；<b>MUST NOT 再叠一层
-   *     {@code .oryxos}</b>
+   * @param oryxosDir 工作区目录（即 {@code .oryxos} 本身）；<b>MUST NOT 再叠一层 {@code .oryxos}</b>
    */
   public MarkdownMemoryStore(Path oryxosDir) {
-    this.memoryDir = oryxosDir.resolve("memory");
-    this.memoryFile = memoryDir.resolve("MEMORY.md");
+    this.oryxosDir = oryxosDir;
+  }
+
+  /**
+   * 本次调用该读写的记忆文件（第 30 节 FR-007）。
+   *
+   * <p><b>每次调用重新解析、绝不在构造器或字段里缓存</b>：同一个 store 实例在 bind 之后要能在「Agent A 的记忆 → Agent B 的记忆 →
+   * 全局记忆」之间切换，缓存一次就会把 Agent A 的记忆写进 Agent B。{@link ToolExecutionContext#current()} 为空时回退全局路径——第 22
+   * 节的行为一字未改（{@code MemoryStoreContractTest} 正是跑在没有上下文的环境里）。
+   *
+   * <p>per-agent 档的文件名固定、目录名来自 Agent 名（目录名是 Agent 名的唯一真相源），模型无法把路径指向别处——故仍不需要过沙箱（与第 22 节同一裁决理由）。
+   *
+   * @return {@code .oryxos/agents/<name>/MEMORY.md}，无上下文时 {@code .oryxos/memory/MEMORY.md}
+   */
+  private Path memoryFile() {
+    String agentName = ToolExecutionContext.current();
+    if (agentName == null || agentName.isBlank()) {
+      return oryxosDir.resolve("memory").resolve(MEMORY_FILE);
+    }
+    return oryxosDir.resolve(AGENTS_DIR).resolve(agentName).resolve(MEMORY_FILE);
   }
 
   @Override
@@ -143,6 +168,7 @@ public class MarkdownMemoryStore implements LongTermMemoryStore {
     List<String> preamble = new ArrayList<>();
     List<String> core = new ArrayList<>();
     List<String> archive = new ArrayList<>();
+    Path memoryFile = memoryFile();
     if (!Files.exists(memoryFile)) {
       return new Sections(preamble, core, archive);
     }
@@ -166,6 +192,7 @@ public class MarkdownMemoryStore implements LongTermMemoryStore {
   }
 
   private void write(Sections sections) {
+    Path memoryFile = memoryFile();
     StringBuilder text = new StringBuilder();
     for (String line : sections.preamble()) {
       text.append(line).append('\n');
@@ -182,7 +209,11 @@ public class MarkdownMemoryStore implements LongTermMemoryStore {
       text.append(entry).append('\n');
     }
     try {
-      Files.createDirectories(memoryDir);
+      // 父目录懒建：per-agent 档的 agents/<name>/ 由 Agent 目录本身保证存在，但第一个写记忆的动作可能早于它
+      Path parent = memoryFile.getParent();
+      if (parent != null) {
+        Files.createDirectories(parent);
+      }
       Files.writeString(
           memoryFile,
           text.toString(),

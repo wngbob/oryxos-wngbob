@@ -496,6 +496,7 @@ rm -rf "$WORK"
 - **「丢目录 = 可见但不可调」**：Step 3 验的就是它。运行时注册 / 注销 / 更新 = 第 30 节。
 - **脚本的 cwd 是工作区根**，不是 Agent 目录（所以示例正文里脚本路径相对工作区根写）。
 - **从 `AGENT.md` 删掉一条 `schedules` 会留下旧行**：第 28 节的 v1 没有 `retired` 字段——重启后不再触发，但 `scheduled_tasks` 里的旧行会留下（列表可见、`runNow` 返回 404）。
+  > **2026-10-22 修订注**：「列表可见」已不成立——`GET /schedules` 只返回当前已注册任务；旧行仅留库，`run` / `executions` / `PUT` 均 404。
 - **`tools` 里写了底座没有的工具名**：Agent 照样加载成功，WARN 只在运行期 `ToolRegistry.availableFor` 打出来并跳过。
 - **长期记忆全局单份、`save_memory` 不去重**：所有 Agent 共写一份 `MEMORY.md`（第 22 节契约），一个每分钟触发的 Agent 会把归档区刷成一串同一句话。演示里这是**预期噪声**（前置事实 11）；它同时暴露一条真实性质——**记忆的去重与提炼不在核心阶段**（第 22 节：写入时机永远由 Agent 判断，不做自动提炼）。生产环境里让一个高频定时任务无脑 `save_memory`，归档区同样会膨胀：那是 Agent 配置问题，不是底座缺陷。
 - **`ProgressiveDisclosureTest` 在文件系统不支持软连接时 `assumeTrue` 跳过**：Linux/WSL 上是真跑（本节实测已跑）。

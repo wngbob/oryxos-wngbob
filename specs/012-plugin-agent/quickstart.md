@@ -163,5 +163,5 @@ rm -rf "$WS"
 | `python3 scripts/foo.py` 能读写任意文件、能自行发网络请求 | 脚本是任意代码；「限定本 Agent 的 `scripts/` 目录」本节不做（需改第 20/24 节沙箱契约），归扩展阶段 |
 | `tools` 里写了不存在的工具名，Agent 仍然加载成功 | 告警只在运行期 `ToolRegistry.availableFor` 打 WARN 并跳过 |
 | 改了 `AGENT.md` 的 frontmatter，`serve` 里不生效 | frontmatter 只在启动时派生一次；改正文即时生效，改配置需重启（热加载归第 30 节） |
-| 从 `AGENT.md` 删掉一条 `schedules` 后，`GET /api/v1/schedules` 仍能看到它 | 第 28 节的 v1 没有 `retired` 字段：重启后不再触发，但 `scheduled_tasks` 里的旧行会留下（列表可见、`runNow` 返回 404）。本节只做「同一进程内再次注册时替换」 |
+| 从 `AGENT.md` 删掉一条 `schedules` 后，`GET /api/v1/schedules` 仍能看到它 | 第 28 节的 v1 没有 `retired` 字段：重启后不再触发，但 `scheduled_tasks` 里的旧行会留下（列表可见、`runNow` 返回 404）。本节只做「同一进程内再次注册时替换」。**2026-10-22 修订注**：「列表可见」已不成立——`/schedules` 四个端点只认当前已注册任务，旧行仅留库 |
 | 丢一个目录进去，`/api/v1/profiles` 立刻有它，`POST /api/v1/agents/{name}/invoke` 却 404 | `/profiles` 每次请求实时扫描磁盘；`invoke` 与 `/info` 的计数读的是**启动期快照**（`ProfileRegistry`）。丢目录「可见」不「可调」，重启后两者一致——运行时注册接口是第 30 节交付物 |

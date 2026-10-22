@@ -76,6 +76,7 @@
 7. **REST 查不到推送成败**：15 个端点里没有 `tool_invocations`，`task_executions` 只记任务级成功（工具失败后 ReAct 会继续，任务照样成功）。推送成败的唯一权威证据在库里，故 Step 6.3 给一条只读查询，用 **`python3` 内置 `sqlite3`**（本机没有 `sqlite3` CLI；`jq` 已装，REST 查询照旧用它）。
 8. **`notify-channel add` 是轻命令**（不启 Spring），可以在 `serve` 停着时跑；但 `${ENV_VAR}` 是**读时解析**——变量必须存在于 **`serve` 进程**的环境里，不是 `add` 那一刻的 shell。
 9. **v1 没有 `retired`**：从 `AGENT.md` 删掉的 schedule 会在库里留下旧行（列表可见、`POST /run` 返回 404）。这是已知边界，不是缺陷。
+   > **2026-10-22 修订注**：后半句「列表可见」已不成立——`GET /schedules` 自该日起只返回**当前已注册**任务（第 30 节交付后修复，用户实跑命中「Agent 已删、任务还在列表里」）；旧行仍留在库里，`run` / `executions` / `PUT` 一律 404。
 
 ---
 
@@ -485,6 +486,7 @@ DEEPSEEK_API_KEY='<你的真实 key>' ./mvnw -pl oryxos-cli -am test \
 ## 已知边界（本节不验，如实记录）
 
 - **v1 没有 `retired`**：从 `AGENT.md` 删掉的 schedule 留下旧行——列表可见、`POST /run` 返回 404。退役语义归扩展阶段。
+  > **2026-10-22 修订注**：「列表可见」已不成立：列表只返回当前已注册任务，旧行仅留在库里（`run` / `executions` / `PUT` 均 404）。
 - **一轮真链路是 3 次模型调用，不是课件写的 2 次**（`notify` 的 content 依赖 `http_get` 的结果，两个工具无法并排调用）。本向导的 `sched-notify` 只调 `notify`，不涉及这条。
 - **到点自动触发不在本向导的判据里**：cron 被故意排到 2027 年；「到点了」由第 25 节向导与 `AgentSchedulerTest` 覆盖。若想看，把 cron 改成 `* * * * *`、重启 `serve`、等 70 秒，看 `runCount` 自增（mock 档不花钱）。
 - **60 秒整体超时仍未强制**：第 26 节裁决 ② 的已知边界，本节未改。
@@ -503,7 +505,7 @@ DEEPSEEK_API_KEY='<你的真实 key>' ./mvnw -pl oryxos-cli -am test \
 | 5 | 18080 端口被占 | 换 `--port 18081`，后面所有 URL 跟着换；或 `kill` 掉占用者 |
 | 6 | `curl .../sched-console#1/run` 返回 404 或只请求了 `/schedules/sched-console` | `#` 未编码 → 用 `%23`（本向导所有 curl 已写好） |
 | 7 | 改了 `AGENT.md`，列表里还是旧的 cron / message | `registerAll()` 只在启动时跑 → 重启 `serve`。重启**不会**清运行状态（Step 5 正好验它） |
-| 8 | 从 `AGENT.md` 删了 schedule，列表里还在 | v1 已知边界：旧行保留、`run` 404。不是缺陷 |
+| 8 | 从 `AGENT.md` 删了 schedule，列表里还在 | v1 已知边界：旧行保留、`run` 404。不是缺陷。**2026-10-22 起该症状不再出现**（列表只返回当前已注册任务）；若仍看到，说明用的是旧 jar |
 | 9 | mock Agent 也想零成本跑，但 `serve` 非要 key | `application.yaml` 的 `${DEEPSEEK_API_KEY}` 无默认值 → `export DEEPSEEK_API_KEY=unused`（deepseek 厂商配置就绪即可，不会真调） |
 | 10 | `notify-channel add` 成功，但真群收不到、`tool_invocations` 报「引用了未设置的环境变量」 | `${ENV_VAR}` 是**读时解析**，变量必须给 **`serve` 进程**——`add` 所在 shell 里 export 了不算，重启 `serve` 时也要在 |
 | 11 | 停了任务，点「立即执行」还在跑 | 预期行为：停用只管到点触发，手动触发无视启用状态（FR 口径） |

@@ -57,6 +57,13 @@ oryxos:
     # 用来在无凭证环境把「对话 → 工具 → 记忆 → 会话 → 审计」整条链路验一遍。
     # 唯一一项不要求 api-key 的厂商（ProviderProperties.validate 对它豁免），AGENT.md 里 provider.name: mock 即选中它。
     - name: mock
+  # 作者模型(第 30 节):「一句话生成 AGENT.md」用的那一次 LLM 调用。
+  # 两个键**只存名称、不存凭证**——凭证仍走 oryxos.providers[].api-key 的环境变量占位,这里不引入第二处 key。
+  # provider 留空 → 装配期取 providers 第一个的 name;model 留空 → generate-files 返回 503 且一次请求都不发
+  # (MUST NOT 向 OpenAI 兼容端点发 model=null)。
+  author:
+    provider: ${ORYXOS_AUTHOR_PROVIDER:}
+    model: ${ORYXOS_AUTHOR_MODEL:}
   # 搜索接缝的档位选择:配了 key 就用带 key 的 Tavily,留空则退回免 key 的 DuckDuckGo(装上就能跑)。
   # 与上面的 providers[].api-key 不同,这个占位**带空默认值**——搜索 key 是可选的,缺失不该让启动失败。
   # 同理 MUST 为 ${ENV_VAR} 占位、禁止明文(章程 VIII/FR-010)。

@@ -4,7 +4,7 @@ Our development philosophy: **slow is fast — restrained and focused**. Nail th
 
 ## Project Status
 
-**Current phase: the runtime kernel is up.** All five core capabilities are delivered and `mvn clean verify` is green (578 tests); cross-section integration checks and the acceptance demos are in progress.
+**Current phase: the runtime kernel is up.** All five core capabilities are delivered, dynamic agent management (one sentence / one API call / drop a directory — live without a restart) is wired in, and `mvn clean verify` is green (723 tests); cross-section integration checks and the acceptance demos are in progress.
 
 - [x] Industry research / requirements / technical solution / AI programming guide
 - [x] Spec-Kit development workflow
@@ -18,7 +18,7 @@ Our development philosophy: **slow is fast — restrained and focused**. Nail th
 
 ### Phase 1 (Now) · Single-node Runtime Kernel
 
-Five core capabilities are up: configuration-as-Agent, multi-Agent coexistence, REST API plus an admin console, MCP integration. Both trigger paths (human and scheduled), restart recovery and multi-Agent isolation are pinned by integration tests; what remains is wiring them into the acceptance demos.
+Five core capabilities are up: configuration-as-Agent, dynamic Agent management (one sentence / one API call / one dropped directory goes live), multi-Agent coexistence, REST API plus an admin console, MCP integration. Both trigger paths (human and scheduled), restart recovery and multi-Agent isolation are pinned by integration tests; what remains is wiring them into the acceptance demos.
 
 ### Phase 2 (Planned) · Distributed Harness
 
@@ -30,7 +30,7 @@ Introduce an Agent communication fabric over A2A: cross-node discovery, delegati
 
 ### Cross-cutting Capabilities
 
-Built alongside each phase: multi-tenancy, SSO, complete audit, tool policies, observability, and a **fully writable** web console (the Phase 1 console only writes to the schedules page; write entry points such as channel management are deferred to the extension phase).
+Built alongside each phase: multi-tenancy, SSO, complete audit, tool policies, observability, and a **fully writable** web console (the Phase 1 console only writes to the Agent detail and schedules pages; write entry points such as channel management are deferred to the extension phase).
 
 ## Long-term Goal
 

@@ -264,6 +264,7 @@ grep -n "Mapping" oryxos-web/src/main/java/io/oryxlabs/oryxos/web/controller/Sch
    - `runNow` 的同步性让 IT 断言无竞态：HTTP 返回时 `runCount` 已含本次，不需要 sleep / 轮询。
 3. **已知边界（不是缺陷，均已显式登记）**：
    - **v1 没有 `retired`**：`AGENT.md` 里删掉的任务在 `scheduled_tasks` 留下旧行——`GET /schedules` 照旧列出，`POST .../run` 对它返回 404（调度器内存里没有它）。退役语义随扩展阶段补。
+     > **2026-10-22 修订注**：「`GET /schedules` 照旧列出」已不成立——第 30 节交付后用户实跑命中「Agent 已删、任务还在列表里」，同日修复为列表与其余三个端点只认**当前已注册**任务；旧行仍留库，不物理删除。见 `specs/013-agent-lifecycle-api/acceptance-report.md` 的「交付后修复」。原文保留作决策史。
    - **一轮真链路是 3 次模型调用，不是课件写的 2 次**（原因见 §一·差异 2）。
    - **60 秒整体超时仍未强制**：第 26 节裁决 ② 的已知边界（强制掐断会撞「全程同步阻塞」硬门禁），本节未改变；工具 / HTTP / notify / 搜索各自的超时都在。
    - **`ask_user` 在钟推里的分档**：第 25 节裁决 4 的已知边界，本节未动（`userInteraction()` 的 javadoc 有 2026-10-18 修订注）。

@@ -97,7 +97,7 @@ class MockAgentE2ETest {
 
   @Test
   @DisplayName("HTTP 建会话、发「记住…」、再把会话 / 列表 / 记忆 / 工具 / 审计全查回来")
-  void wholeChainOverHttp() throws SQLException {
+  void wholeChainOverHttp() throws SQLException, IOException {
     String sessionId = createSession();
 
     JsonNode sendBody =
@@ -130,12 +130,13 @@ class MockAgentE2ETest {
     assertThat(summary.path("messageCount").asInt()).isEqualTo(4);
     assertThat(summary.path("profile").asText()).isEqualTo(AGENT);
 
-    // 支柱二 · 记忆写得出：默认 markdown 档，真落了文件
-    JsonNode memory =
-        Objects.requireNonNull(rest.getForEntity("/api/v1/memory", JsonNode.class).getBody())
-            .path("data");
-    assertThat(memory.path("core").asText() + memory.path("archival").asText())
-        .contains("我喜欢喝美式咖啡");
+    // 支柱二 · 记忆写得出：默认 markdown 档，真落了文件。
+    // 第 30 节起 Markdown 档按 Agent 隔离（agents/<name>/MEMORY.md），全局 GET /api/v1/memory 同时移除；
+    // per-agent 的 REST 面是 GET /api/v1/agents/{name}/memory，它的判卷在 web 层，这里只看「事真的落到磁盘了吗」
+    String memoryFile =
+        Files.readString(
+            ROOT.resolve("agents").resolve(AGENT).resolve("MEMORY.md"), StandardCharsets.UTF_8);
+    assertThat(memoryFile).contains("我喜欢喝美式咖啡");
 
     // 支柱三 · 工具查得到
     JsonNode tools =

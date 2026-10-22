@@ -1,5 +1,6 @@
 package io.oryxlabs.oryxos.web.api;
 
+import io.oryxlabs.oryxos.core.agent.AgentAuthorUnavailableException;
 import io.oryxlabs.oryxos.provider.ProviderUnavailableException;
 import io.oryxlabs.oryxos.web.error.AgentTimeoutException;
 import io.oryxlabs.oryxos.web.error.ProfileNotFoundException;
@@ -92,6 +93,20 @@ public class GlobalExceptionHandler {
     log.warn("provider unavailable", ex);
     return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
         .body(ApiResponse.error(503, "provider unavailable: " + ex.providerName()));
+  }
+
+  /**
+   * 作者模型未配置 → 503（第 30 节 FR-004）。
+   *
+   * <p>与 {@link #providerUnavailable} 同档但理由不同：这里不是对端故障，是部署方没设 {@code oryxos.author.model}。归 503
+   * 的依据是「配好就能用、且一次模型请求都没发出去」——被拒请求 MUST NOT 触发任何模型调用（FR-022）。
+   */
+  @ExceptionHandler(AgentAuthorUnavailableException.class)
+  public ResponseEntity<ApiResponse<Void>> agentAuthorUnavailable(
+      AgentAuthorUnavailableException ex) {
+    log.warn("agent author unavailable: {}", sanitizeForLog(ex.getMessage()));
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+        .body(ApiResponse.error(503, ex.getMessage()));
   }
 
   /** Agent 调用超时 → 504。 */

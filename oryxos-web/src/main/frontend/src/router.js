@@ -3,7 +3,7 @@ import { ref } from 'vue'
 /**
  * 极简路由：不引 vue-router。
  *
- * 七个页面（概览 + 五个查询页 + 定时任务管理页）、零嵌套、零守卫、零懒加载——引一个路由库只为做
+ * 六个页面（概览 + 会话 + Agent + 工具 + 定时任务 + 运行状态）、零嵌套、零守卫、零懒加载——引一个路由库只为做
  * 「切换一个组件」，换来的依赖体积与升级面都不划算（契约 §1 把依赖钉死在 vue / vite / @vitejs/plugin-vue 三条）。
  *
  * 走 History API 而不是 hash：URL 是 `/admin/tools` 这种干净形状，
@@ -18,11 +18,14 @@ export const BASE_PATH = '/admin/'
  *
  * 「概览」放第一：打开 /admin/ 先看底座此刻的整体状态（Agent / 会话 / 工具 / 运行时长 / 健康），
  * 再往下钻具体查询页（2026-10-20 用户裁决；**不是**产品介绍页——那部分在官网上）。
+ *
+ * 长期记忆不再是独立页面（第 30 节 FR-007）：它属于某个 Agent，落在 Agent 详情的「记忆」页签里，
+ * 对外没有「全局那一份」这个概念。
  */
 export const ROUTES = [
   { path: '/overview', label: '概览', hint: 'Agent、会话、工具与运行状态', code: 'OVERVIEW' },
   { path: '/sessions', label: '会话', hint: '最近活跃的会话与历史', code: 'SESSIONS' },
-  { path: '/profiles', label: 'Agent', hint: 'Agent 列表与配置有效性', code: 'AGENTS' },
+  { path: '/profiles', label: 'Agent', hint: '列表、详情五页签与新建', code: 'AGENTS' },
   { path: '/tools', label: '工具', hint: '已注册工具与来源', code: 'TOOLS' },
   {
     path: '/schedules',
@@ -30,7 +33,6 @@ export const ROUTES = [
     hint: 'cron 任务、运行状态与手动触发',
     code: 'SCHEDULES'
   },
-  { path: '/memory', label: '长期记忆', hint: '核心区与归档区', code: 'MEMORY' },
   { path: '/status', label: '运行状态', hint: '健康检查与版本信息', code: 'STATUS' }
 ]
 

@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +43,8 @@ class ScheduleApiControllerTest {
 
   private static final String TASK_ID = "daily-weather#1";
 
+  private static final String SECOND_TASK_ID = "weather-alert#1";
+
   @Autowired private MockMvc mockMvc;
 
   @Autowired private ObjectMapper objectMapper;
@@ -53,7 +56,11 @@ class ScheduleApiControllerTest {
   @Test
   void list_returnsAllTasksWithRuntimeState() throws Exception {
     when(taskStore.list())
-        .thenReturn(List.of(view(true, 2, ScheduledTaskView.STATUS_SUCCESS), view(false, 0, null)));
+        .thenReturn(
+            List.of(
+                view(TASK_ID, true, 2, ScheduledTaskView.STATUS_SUCCESS),
+                view(SECOND_TASK_ID, false, 0, null)));
+    when(agentScheduler.registeredTaskIds()).thenReturn(Set.of(TASK_ID, SECOND_TASK_ID));
 
     mockMvc
         .perform(get("/api/v1/schedules"))
@@ -66,8 +73,23 @@ class ScheduleApiControllerTest {
         .andExpect(jsonPath("$.data[0].runCount").value(2))
         .andExpect(jsonPath("$.data[0].lastStatus").value("success"))
         .andExpect(jsonPath("$.data[0].nextRunAt").exists())
+        .andExpect(jsonPath("$.data[1].taskId").value(SECOND_TASK_ID))
         .andExpect(jsonPath("$.data[1].enabled").value(false))
         .andExpect(jsonPath("$.data[1].lastStatus").value(nullValue()));
+  }
+
+  @Test
+  @DisplayName("Agent 已删除 / schedule 已从 AGENT.md 移除：库里的历史行不出现在列表里")
+  void list_hidesStoredTasksThatAreNoLongerRegistered() throws Exception {
+    when(taskStore.list())
+        .thenReturn(List.of(view(TASK_ID, true, 0, null), view(SECOND_TASK_ID, true, 0, null)));
+    when(agentScheduler.registeredTaskIds()).thenReturn(Set.of(TASK_ID));
+
+    mockMvc
+        .perform(get("/api/v1/schedules"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.length()").value(1))
+        .andExpect(jsonPath("$.data[0].taskId").value(TASK_ID));
   }
 
   @Test
@@ -86,6 +108,7 @@ class ScheduleApiControllerTest {
   @Test
   void executions_returnsHistoryInStoreOrder() throws Exception {
     when(taskStore.find(TASK_ID)).thenReturn(Optional.of(view(true, 2, "failed")));
+    when(agentScheduler.registeredTaskIds()).thenReturn(Set.of(TASK_ID));
     when(taskStore.executions(TASK_ID))
         .thenReturn(
             List.of(
@@ -120,6 +143,7 @@ class ScheduleApiControllerTest {
     ScheduledTaskView before = view(true, 0, null);
     ScheduledTaskView after = view(true, 1, ScheduledTaskView.STATUS_SUCCESS);
     when(taskStore.find(TASK_ID)).thenReturn(Optional.of(before), Optional.of(after));
+    when(agentScheduler.registeredTaskIds()).thenReturn(Set.of(TASK_ID));
     when(agentScheduler.runNow(TASK_ID)).thenReturn(true);
 
     mockMvc
@@ -142,21 +166,24 @@ class ScheduleApiControllerTest {
   }
 
   @Test
-  @DisplayName("库里有行、调度器里没有（定义已从 AGENT.md 删除）→ 404")
+  @DisplayName("库里有行、调度器里没有（定义已从 AGENT.md 删除）→ 404 且不触发")
   void run_taskNotRegistered_returns404() throws Exception {
     when(taskStore.find(TASK_ID)).thenReturn(Optional.of(view(true, 0, null)));
-    when(agentScheduler.runNow(TASK_ID)).thenReturn(false);
+    when(agentScheduler.registeredTaskIds()).thenReturn(Set.of());
 
     mockMvc
         .perform(post("/api/v1/schedules/{id}/run", TASK_ID))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.message").value("schedule not found: " + TASK_ID));
+
+    verify(agentScheduler, never()).runNow(any());
   }
 
   @Test
   void update_togglesEnabledAndReturnsUpdatedState() throws Exception {
     when(taskStore.find(TASK_ID))
         .thenReturn(Optional.of(view(true, 0, null)), Optional.of(view(false, 0, null)));
+    when(agentScheduler.registeredTaskIds()).thenReturn(Set.of(TASK_ID));
     when(taskStore.setEnabled(TASK_ID, false)).thenReturn(true);
 
     mockMvc
@@ -174,6 +201,7 @@ class ScheduleApiControllerTest {
   @Test
   void update_missingEnabled_returns400() throws Exception {
     when(taskStore.find(TASK_ID)).thenReturn(Optional.of(view(true, 0, null)));
+    when(agentScheduler.registeredTaskIds()).thenReturn(Set.of(TASK_ID));
 
     mockMvc
         .perform(
@@ -199,10 +227,45 @@ class ScheduleApiControllerTest {
         .andExpect(status().isNotFound());
   }
 
+  @Test
+  @DisplayName("有历史行但任务当前未注册：执行历史 404，不读历史")
+  void executions_storedButNotRegistered_returns404() throws Exception {
+    when(taskStore.find(TASK_ID)).thenReturn(Optional.of(view(true, 0, null)));
+    when(agentScheduler.registeredTaskIds()).thenReturn(Set.of());
+
+    mockMvc
+        .perform(get("/api/v1/schedules/{id}/executions", TASK_ID))
+        .andExpect(status().isNotFound());
+
+    verify(taskStore, never()).executions(any());
+  }
+
+  @Test
+  @DisplayName("有历史行但任务当前未注册：启用停用 404，不改状态")
+  void update_storedButNotRegistered_returns404() throws Exception {
+    when(taskStore.find(TASK_ID)).thenReturn(Optional.of(view(true, 0, null)));
+    when(agentScheduler.registeredTaskIds()).thenReturn(Set.of());
+
+    mockMvc
+        .perform(
+            put("/api/v1/schedules/{id}", TASK_ID)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of("enabled", false))))
+        .andExpect(status().isNotFound());
+
+    verify(taskStore, never()).setEnabled(any(), anyBoolean());
+  }
+
   private static ScheduledTaskView view(boolean enabled, int runCount, String lastStatus) {
+    return view(TASK_ID, enabled, runCount, lastStatus);
+  }
+
+  private static ScheduledTaskView view(
+      String taskId, boolean enabled, int runCount, String lastStatus) {
+    String profileName = taskId.substring(0, taskId.indexOf('#'));
     return new ScheduledTaskView(
-        TASK_ID,
-        "daily-weather",
+        taskId,
+        profileName,
         "0 9 * * *",
         "Asia/Shanghai",
         "播报今天的天气",

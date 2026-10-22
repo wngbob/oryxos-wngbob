@@ -128,7 +128,9 @@ onMounted(load)
       <div class="kpi">
         <span class="kpi-label">已运行</span>
         <span class="kpi-value mono">{{ info ? formatUptime(info.uptimeSeconds) : '—' }}</span>
-        <span class="kpi-foot muted">{{ info ? 'v' + info.version : '—' }}</span>
+        <span class="kpi-foot muted">{{
+          info ? (info.version === 'unknown' ? '版本未知' : 'v' + info.version) : '—'
+        }}</span>
       </div>
     </div>
 

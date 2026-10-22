@@ -456,6 +456,10 @@ java -jar /home/wngbob/oryxos-wngbob/oryxos-boot/target/oryxos.jar tool list
 
 ## 七、备注
 
+> **⚠ 2026-10-21 修订注（第 30 节 FR-007）：长期记忆自第 30 节起按 Agent 隔离**
+>
+> 本报告通篇（以及 `spec.md` 仲裁 4 / FR-023）以「长期记忆**全局单份** `.oryxos/memory/MEMORY.md`、不按 Agent 隔离」为口径，那是**第 22 节交付时**的形态。第 30 节按用户裁决把 Markdown 档改为 `.oryxos/agents/<name>/MEMORY.md`，靠 `ToolExecutionContext` 携带 Agent 名分派，**无 Agent 上下文时回退** `.oryxos/memory/MEMORY.md`（定时任务 / 无状态调用之外的场景仍会走到回退）。原文一律保留作决策史，MUST NOT 删改；判断当前行为请以 `specs/013-agent-lifecycle-api/` 与 `CLAUDE.md` 第 30 节条目为准。**未变的**：三档 SPI（`LongTermMemoryStore`）形状、`MemoryService` 门面签名、三档契约测试（第 30 节 `MemoryStoreContractTest` 仍全绿）；**变了的**：只有 Markdown 档的路径解析 + 门面在委托前后置入 / 复原上下文。本报告当时的测试计数（451）同样是历史数字。
+
 - **本节未 commit、未 push、未跑 `package.sh`**——同步时机由你决定。`git status --short` 见 §6.1。
 - **本节抓红并修复共 8 处**，如实记录：
   - **1 处测试自身写错**（`MemoryAssemblyTest.inMemoryStore_isNotSelectable`）：我原本断言 `hasMessageNotContaining("InMemory")`，但把 `"InMemoryMemoryStore"` 当 backend 值传了进去，而报错消息**正确地回显了调用方给的那个值**。改法：backend 值改 `"inmemory"`，断言改成 `hasMessageNotContaining(InMemoryMemoryStore.class.getSimpleName())`，并加注释说明「回显的那个值不是机密，笼统断言『消息不含 InMemory』没有意义——真正要钉的是合法取值清单里没有类名」。

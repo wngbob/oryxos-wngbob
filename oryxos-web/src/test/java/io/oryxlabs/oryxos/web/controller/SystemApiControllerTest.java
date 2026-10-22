@@ -71,17 +71,19 @@ class SystemApiControllerTest {
   }
 
   @Test
-  @DisplayName("/info：四个计数各取各的数据源，version 读不到时回 unknown")
+  @DisplayName("/info：四个计数各取各的数据源，version 优先读构建注入的资源（不是只读 manifest）")
   void info_reportsCountsFromTheirSources() throws Exception {
     when(profileRegistry.all()).thenReturn(List.of(mock(Profile.class), mock(Profile.class)));
     when(sessionService.countActive()).thenReturn(7L);
     when(toolRegistry.registered()).thenReturn(toolEntries(15));
 
+    // 测试资源 oryxos-version.properties 固定为 9.9.9-test：断言版本真的来自它。
+    // 只写 isString() 的话，「打包后恒为 unknown」这个缺陷（vunknown）照样绿
     mockMvc
         .perform(get("/api/v1/info"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.name").value("oryxos"))
-        .andExpect(jsonPath("$.data.version").isString())
+        .andExpect(jsonPath("$.data.version").value("9.9.9-test"))
         .andExpect(jsonPath("$.data.javaVersion").isString())
         .andExpect(jsonPath("$.data.agents").value(2))
         .andExpect(jsonPath("$.data.activeSessions").value(7))
