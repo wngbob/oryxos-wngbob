@@ -104,7 +104,7 @@ const zh = {
   start: {
     label: 'QUICK START',
     title: '快速开始',
-    note: '✅ 运行时内核已跑通：五大核心能力已交付，以下命令均已在真实构建上验证；验收 Demo 与跨节串联验收进行中。',
+    note: '✅ 运行时内核已跑通：五大核心能力已交付，三个验收 Demo（每日天气 / 科技日报 / GitHub 日报）已跑通，以下命令均已在真实构建上验证。',
     comments: ['# 环境要求：JDK 21+、Maven 3.8+', '# 构建（必须带 clean）', '# 初始化工作区（幂等，含建表）', '# 创建一个 Agent', '# 常驻：REST /api/v1 + 管理台 /admin/ + 文档 /swagger-ui'],
     cmds: ['./mvnw clean package -Ddependency-check.skip=true', 'java -jar oryxos-boot/target/oryxos.jar init', 'java -jar oryxos-boot/target/oryxos.jar profile create my-assistant', 'java -jar oryxos-boot/target/oryxos.jar serve'],
     agentTitle: '一个目录 = 一个 Agent',
@@ -115,7 +115,7 @@ const zh = {
     title: '路线图',
     motto: '慢就是快，克制且聚焦。先把单机的运行时内核做扎实，再逐步生长出分布式能力。',
     phases: [
-      { tag: '阶段一 · 当前', name: '单机运行时内核', desc: '五大核心能力已跑通：配置即 Agent、动态管理 Agent（一句话 / 一次 API / 丢一个目录即上线）、多 Agent 并存、REST API 与管理台（Agent 与定时任务页可写）、对接 MCP；正在收尾验收 Demo' },
+      { tag: '阶段一 · 当前', name: '单机运行时内核', desc: '五大核心能力已跑通：配置即 Agent、动态管理 Agent（一句话 / 一次 API / 丢一个目录即上线）、多 Agent 并存、REST API 与管理台（Agent 与定时任务页可写）、对接 MCP；三个验收 Demo（天气 / 科技日报 / GitHub 日报）每天到点自己跑' },
       { tag: '阶段二 · 规划', name: '底座分布式', desc: '节点无状态化、状态外置、多副本部署，支撑更大规模与高可用' },
       { tag: '阶段三 · 愿景', name: '跨节点 Agent 协作', desc: '引入 Agent 通信底座，对接 A2A，跨节点发现、委托、可靠异步协同' }
     ],
@@ -231,7 +231,7 @@ const en = {
   start: {
     label: 'QUICK START',
     title: 'Quick Start',
-    note: '✅ Runtime kernel is up: all five core capabilities are delivered and the commands below are verified on real builds. Acceptance demos and cross-section integration checks are in progress.',
+    note: '✅ Runtime kernel is up: all five core capabilities are delivered and the three acceptance demos (daily weather / tech digest / GitHub digest) are running; the commands below are verified on real builds.',
     comments: ['# Requires JDK 21+ and Maven 3.8+', '# Build (always with clean)', '# Initialize the workspace (idempotent, creates tables)', '# Create an Agent', '# Serve: REST /api/v1 + admin /admin/ + docs /swagger-ui'],
     cmds: ['./mvnw clean package -Ddependency-check.skip=true', 'java -jar oryxos-boot/target/oryxos.jar init', 'java -jar oryxos-boot/target/oryxos.jar profile create my-assistant', 'java -jar oryxos-boot/target/oryxos.jar serve'],
     agentTitle: 'One directory = one Agent',
@@ -242,7 +242,7 @@ const en = {
     title: 'Roadmap',
     motto: 'Slow is fast: restrained and focused. Nail the single-node runtime kernel first, then grow distributed capabilities.',
     phases: [
-      { tag: 'Phase 1 · Now', name: 'Single-node Runtime Kernel', desc: 'Five core capabilities are up: configuration-as-Agent, dynamic Agent management (one sentence / one API call / one dropped directory goes live), multi-Agent coexistence, REST API plus admin console (writable Agent and schedules pages), MCP integration; wrapping up acceptance demos' },
+      { tag: 'Phase 1 · Now', name: 'Single-node Runtime Kernel', desc: 'Five core capabilities are up: configuration-as-Agent, dynamic Agent management (one sentence / one API call / one dropped directory goes live), multi-Agent coexistence, REST API plus admin console (writable Agent and schedules pages), MCP integration; three acceptance demos (weather / tech digest / GitHub digest) run on schedule' },
       { tag: 'Phase 2 · Planned', name: 'Distributed Harness', desc: 'Stateless nodes, external state, multi-replica deployment for scale and high availability' },
       { tag: 'Phase 3 · Vision', name: 'Cross-node Agent Collaboration', desc: 'Agent communication fabric over A2A: cross-node discovery, delegation, reliable async coordination' }
     ],

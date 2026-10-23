@@ -38,6 +38,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.Trigger;
 import org.springframework.scheduling.TriggerContext;
@@ -287,6 +288,37 @@ class AgentSchedulerTest {
     // 两次触发按同一个三元组取会话，拿到同一个会话
     verify(sessionService, times(2)).getOrCreate("scheduler", "scheduler", "weather");
     verify(agentService, times(2)).process(session, "每日例行汇报");
+  }
+
+  @Test
+  @DisplayName("编辑 AGENT.md 后清空调度会话历史_身份不变（2026-10-22）")
+  void resetScheduleSession_clearsAccumulatedHistory_keepsIdentity() {
+    Profile weather = profile("weather", List.of());
+    Session history =
+        Session.create("scheduler:scheduler:weather", "scheduler", "scheduler", "weather");
+    history.appendUserMessage("北京今天天气怎么样");
+    history.appendAssistantMessage("我先查一下。", List.of());
+    when(sessionService.getOrCreate("scheduler", "scheduler", "weather")).thenReturn(history);
+
+    newScheduler(weather).resetScheduleSession("weather");
+
+    // 写回的是一条同标识、同三元组、历史为空的会话：模型下一轮看不到旧上下文
+    ArgumentCaptor<Session> saved = ArgumentCaptor.forClass(Session.class);
+    verify(sessionService).save(saved.capture());
+    assertThat(saved.getValue().id()).isEqualTo(history.id());
+    assertThat(saved.getValue().channel()).isEqualTo("scheduler");
+    assertThat(saved.getValue().userId()).isEqualTo("scheduler");
+    assertThat(saved.getValue().profileName()).isEqualTo("weather");
+    assertThat(saved.getValue().messages()).isEmpty();
+  }
+
+  @Test
+  void resetScheduleSession_withoutHistory_doesNotWriteAnything() {
+    // 还没跑过这个 Agent：getOrCreate 只造内存对象，一次编辑不该凭空多出一条空会话
+    newScheduler(profile("weather", List.of())).resetScheduleSession("weather");
+
+    verify(sessionService).getOrCreate("scheduler", "scheduler", "weather");
+    verify(sessionService, never()).save(any());
   }
 
   @Test

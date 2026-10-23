@@ -1,7 +1,12 @@
 package io.oryxlabs.oryxos.core.agent;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
 
 import io.oryxlabs.oryxos.core.engine.AgentService;
 import io.oryxlabs.oryxos.core.llm.LlmClient;
@@ -47,6 +52,7 @@ class WorkspaceWatcherTest {
 
   private Path agentsDir;
   private ProfileRegistry registry;
+  private AgentScheduler scheduler;
   private WorkspaceWatcher watcher;
 
   @BeforeEach
@@ -54,11 +60,12 @@ class WorkspaceWatcherTest {
     agentsDir = Files.createDirectories(tempDir.resolve("agents"));
     ProfileLoader loader = new ProfileLoader(agentsDir, Set.of("deepseek", "mock"), name -> null);
     registry = new ProfileRegistry(List.of());
+    scheduler = mock(AgentScheduler.class);
     AgentLifecycleService lifecycle =
         new AgentLifecycleService(
             loader,
             registry,
-            mock(AgentScheduler.class),
+            scheduler,
             mock(AgentStore.class),
             mock(LlmClient.class),
             mock(ToolCatalog.class),
@@ -141,6 +148,54 @@ class WorkspaceWatcherTest {
     awaitRegistered("weather");
   }
 
+  @Test
+  @DisplayName("直接编辑 AGENT.md 即重新登记：改 cron 不用重启（2026-10-22 边界修订）")
+  void editingAgentMarkdownReRegistersWithoutRestart() throws IOException {
+    writeAgent("weather");
+    watcher.start();
+    awaitRegistered("weather");
+
+    Files.writeString(
+        agentsDir.resolve("weather").resolve("AGENT.md"),
+        agentMarkdown("weather", "0 33 17 * * *"),
+        StandardCharsets.UTF_8);
+
+    verify(scheduler, timeout(POLL_TIMEOUT_MILLIS))
+        .registerProfile(
+            argThat(
+                profile ->
+                    "weather".equals(profile.name())
+                        && profile.schedules().stream()
+                            .anyMatch(spec -> "0 33 17 * * *".equals(spec.cron()))));
+  }
+
+  @Test
+  @DisplayName("直接编辑 AGENT.md 后清空该 Agent 的调度会话历史（2026-10-22）")
+  void editingAgentMarkdownResetsSchedulerSession() throws IOException {
+    writeAgent("weather");
+    watcher.start();
+    awaitRegistered("weather");
+
+    Files.writeString(
+        agentsDir.resolve("weather").resolve("AGENT.md"),
+        agentMarkdown("weather"),
+        StandardCharsets.UTF_8);
+
+    // 不清历史的话，模型下一轮仍看得见旧上下文，改了正文也照旧重放
+    verify(scheduler, timeout(POLL_TIMEOUT_MILLIS)).resetScheduleSession("weather");
+  }
+
+  @Test
+  @DisplayName("启动扫描不清历史：重启不该丢上下文")
+  void startupScanDoesNotResetSchedulerSession() throws IOException {
+    writeAgent("weather");
+
+    watcher.start();
+    awaitRegistered("weather");
+
+    verify(scheduler, never()).resetScheduleSession(anyString());
+  }
+
   /** 轮询到索引里出现为止；超时即判红（`assertThat` 的失败消息会带上 Agent 名）。 */
   private void awaitRegistered(String name) {
     await(() -> registry.exists(name), "Agent 应当在 " + POLL_TIMEOUT_MILLIS + "ms 内被登记: " + name);
@@ -169,6 +224,24 @@ class WorkspaceWatcherTest {
         + "provider:\n"
         + "  name: mock\n"
         + "  model: mock\n"
+        + "---\n\n"
+        + "你是 "
+        + name
+        + " 助手。\n";
+  }
+
+  /** 带一条定时任务的版本：用于验证「改 cron → 重新登记」这条链路。 */
+  private static String agentMarkdown(String name, String cron) {
+    return "---\n"
+        + "description: 测试 Agent\n"
+        + "provider:\n"
+        + "  name: mock\n"
+        + "  model: mock\n"
+        + "schedules:\n"
+        + "  - cron: \""
+        + cron
+        + "\"\n"
+        + "    message: 测试一下\n"
         + "---\n\n"
         + "你是 "
         + name

@@ -107,4 +107,6 @@ http:
     - open.larksuite.com            # Lark(与飞书同一套协议)
     - qyapi.weixin.qq.com           # 企业微信群机器人
     - api.open-meteo.com            # 第 28 节：每日天气 Demo 的免 key 天气接口
+    - geocoding-api.open-meteo.com  # 2026-10-22：天气 Demo 先按城市名查经纬度（城市名只写一次）
     - api.github.com                # 第 31 节 Demo 前置：GitHub 日报的接口域（脚本走子进程,列在此处便于审计）
+    - hn.algolia.com                # 第 31 节 Demo：科技日报的免 key 新闻源（HN front page JSON）

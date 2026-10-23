@@ -45,6 +45,12 @@ public class AgentScheduler {
 
   private static final Logger log = LoggerFactory.getLogger(AgentScheduler.class);
 
+  /** 调度会话的渠道名（第 25 节定下的固定三元组的第一项）。 */
+  private static final String SCHEDULER_CHANNEL = "scheduler";
+
+  /** 调度会话的用户标识（同一三元组的第二项）。 */
+  private static final String SCHEDULER_USER = "scheduler";
+
   /** 5 段 Unix cron（{@code 分 时 日 月 周}）——本仓契约的基准方言（FR-003）。 */
   private static final int UNIX_CRON_FIELDS = 5;
 
@@ -140,6 +146,37 @@ public class AgentScheduler {
       total += registerProfile(profile);
     }
     log.info("定时任务注册完成：共 {} 条", total);
+  }
+
+  /**
+   * 清空某个 Agent 的调度会话历史（2026-10-22：直接编辑 {@code AGENT.md} 后由 {@code WorkspaceWatcher} 触发）。
+   *
+   * <p><b>为什么需要它</b>：调度会话是<b>同一个三元组、长期累积</b>的上下文（{@code scheduler:scheduler:<name>}）。改了 {@code
+   * AGENT.md} 正文之后，system prompt 已经是新的，但模型仍看得见上几轮的完整历史，会照着旧上下文里的城市 / URL /
+   * 工具调用原样重放——「提示词改了、结果没变」就是这么来的。清空历史让新定义成为唯一依据。
+   *
+   * <p><b>只有「直接编辑」这一条路径调用</b>：启动扫描与 API 保存（{@code AgentLifecycleService.update} / {@code
+   * saveFiles}）都不调它——重启不该丢上下文，走 API 时调用方已经拿到了校验结果。
+   *
+   * <p><b>只清消息，不动身份</b>：{@link SessionService#save} 的更新路径只写 {@code messages_json} 与 {@code
+   * last_active_at}，会话标识 / {@code created_at} / 归档态原样保留；两张审计表一行不动——「跑过什么」的权威记录在
+   * 那里，不在会话历史里（本类也不写审计，审计走 {@code AgentService} 内部既有路径）。
+   *
+   * <p><b>没跑过就不建行</b>：{@code getOrCreate} 对不存在的三元组只造内存对象；消息为空即无需写库，一次编辑不会凭空多出一条空会话。
+   *
+   * <p><b>这是 {@link Session}「只追加」不变量的唯一一处有意例外</b>（用户裁决 2026-10-22），故收成一个显式方法，而不是让调用方自己拼 Session。
+   *
+   * @param profileName Agent 名
+   */
+  public void resetScheduleSession(String profileName) {
+    Objects.requireNonNull(profileName, "profileName");
+    Session existing = sessionService.getOrCreate(SCHEDULER_CHANNEL, SCHEDULER_USER, profileName);
+    if (existing.messages().isEmpty()) {
+      return;
+    }
+    sessionService.save(
+        Session.create(existing.id(), existing.channel(), existing.userId(), profileName));
+    log.info("已重置调度会话历史：{}", sanitizeForLog(profileName));
   }
 
   /**
@@ -329,7 +366,7 @@ public class AgentScheduler {
     boolean success = false;
     String errorMessage = null;
     try {
-      session = sessionService.getOrCreate("scheduler", "scheduler", profile.name());
+      session = sessionService.getOrCreate(SCHEDULER_CHANNEL, SCHEDULER_USER, profile.name());
       agentService.process(session, config.message());
       success = true;
     } catch (Exception e) {

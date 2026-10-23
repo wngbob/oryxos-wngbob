@@ -275,3 +275,47 @@ curl -s localhost:8080/v3/api-docs | python3 -c 'import json,sys; d=json.load(sy
 - **修法**：`git config core.symlinks true`（治本，否则下次签出又退化；全仓只有这一个受跟踪软连接，`git ls-files -s | awk '$1=="120000"'` 命中 1 条，开开关不产生模式差异），随后删掉那个文本文件、`ln -s ../../../skills/report-format ...` 重建工作区条目（相对软连接，与 `.oryxos/` 内同一相对深度——`examples/agents/daily-reconcile/skills/` 与 `.oryxos/agents/<name>/skills/` 都往上三级到各自的 skills 根）。这一步只动本地工作副本与 `.git/config`，**不产生任何可提交的改动**（重建后的内容与 blob 相同，`git status -- examples/` 为空）。
 - **实测**：`ls -l` 为 `report-format -> ../../../skills/report-format`；`readlink -f` 指向 `examples/skills/report-format`；`cp -a` 进 `/tmp` 工作区后软连接保留、`readlink -f` 落在 `<WS>/.oryxos/skills/report-format`、`head SKILL.md` 读得到 frontmatter（临时目录验完已 `rm -rf`）。
 - **已知边界不变**：`ProgressiveDisclosureTest` 在文件系统不支持软连接时仍 `assumeTrue` 跳过（Linux/WSL 上真跑）。
+
+## 七、交付后扩展：直接编辑 `AGENT.md` 免重启生效（2026-10-22，用户实跑要求）
+
+### 7.1 原状与根因
+
+第 30 节的已知边界是「AGENT.md 的编辑走显式 update 重注册」（见 `spec.md` Assumptions 与 §四）。用户在第 31 节人工验收时直接改工作区里的 `weather-daily/AGENT.md`（cron `0 55 16 * * *` → `0 33 17 * * *`），`/schedules` 一直显示旧 cron。根因不是解析或调度，而是**监听粒度**：`WorkspaceWatcher` 只给 `agents/` 这一层注册了 `WatchService` key，`agents/<name>/AGENT.md` 的写入事件打在**子目录自己的 key** 上，从未被消费。现场证据：serve 启动 17:18:38、文件 mtime 17:31:32，日志中启动扫描后再无登记记录；同一内容走 `PUT /api/v1/agents/{name}` 后 cron 立刻变新。
+
+### 7.2 改动
+
+- `WorkspaceWatcher` 为**每个 Agent 子目录单独注册 key**：启动扫描时挂、目录 `ENTRY_CREATE` 时挂、目录 `ENTRY_DELETE` 时取消并从表里移除；子目录 key 失效只丢该 key，不退出主监听。
+- `AGENT.md` 的 `ENTRY_CREATE` / `ENTRY_MODIFY` 经 **300ms 静默期**去抖（持续写入封顶 2s）后调同一条 `lifecycleService.register(dir)`，先取消旧定时句柄再登记，不会新旧并存。
+- 编辑器「写临时文件 → 改名覆盖」产生的 `ENTRY_DELETE` **刻意忽略**，保留旧运行态等后续写事件；保存了语法错误的内容时重新登记失败**只 WARN 不注销**。
+- `WatchService` 改为**显式传参**（监听线程不再读 `watchService` 字段），过 SpotBugs `IS2_INCONSISTENT_SYNC`。
+- 测试：`WorkspaceWatcherTest.editingAgentMarkdownReRegistersWithoutRestart`——改 cron 后 `verify(scheduler, timeout(5s)).registerProfile(...)` 收到新 cron；`WorkspaceWatcherTest` 5 → **6**。
+- 文档：`specs/013-agent-lifecycle-api/spec.md` 的 Assumptions 挂 2026-10-22 修订注（该边界已推翻）；`CLAUDE.md` 第 30 节条下新增交付后扩展段；第 31 节向导新增 Step 5.1（直接改 cron 的判据）。
+
+### 7.3 验证
+
+`mvn clean verify -Ddependency-check.skip=true` 全绿，**733** 条（732 → +1），Spotless / P3C / Checkstyle / SpotBugs / FindSecBugs 均通过。首次全量跑时 SpotBugs 报 `IS2_INCONSISTENT_SYNC`（`watchService` 同步写、监听线程无锁读），按上条改为显式传参后清除——**改实现语义，没有放宽阈值**。
+
+## 八、交付后扩展②：直接编辑 AGENT.md 时自动重置调度会话历史（2026-10-22，用户裁决）
+
+### 8.1 现象与根因
+
+§七 让「改 cron」免重启生效后，用户把 `weather-daily` 正文的城市从北京改成成都再 `POST /api/v1/schedules/weather-daily%231/run`，**群里收到的仍是北京天气**。
+
+排查结论：**不是热加载失效**。现场证据：`serve` 的 cwd 与工作区一致、磁盘上的 `AGENT.md` 已是成都两步版、watcher 已重新登记（cron 已更新）、jar 里有 `geocoding-api.open-meteo.com` 白名单；`ContextLoader` / `PromptBuilder` 每轮重读文件（无缓存）。真正原因是**调度会话历史锚定**：`scheduler:scheduler:weather-daily` 已累积 48 条消息，模型看得到上一轮那次北京 `http_get` 的完整参数，直接照抄——连续 8 次触发（`tool_invocations` id 29~36）都只请求 `latitude=39.9&longitude=116.4`，一次 geocoding 都没发。旁证：在 `/tmp` 的隔离副本里只清掉该会话历史（不带 webhook 环境变量、不向真实群发送），同一份 `AGENT.md` 立刻走「geocoding `name=成都` → forecast `30.66667/104.06667`」两步。
+
+### 8.2 用户裁决与改动
+
+用户选择 **「编辑时自动重置」**：监听器检测到 `AGENT.md` 变更并重新登记时，清空该 Agent 的调度会话历史；**启动扫描与 API 保存不动历史**（重启不该丢上下文，API 保存时调用方已拿到校验结果）。
+
+- `AgentScheduler.resetScheduleSession(String profileName)`：三元组落在它这里（`scheduler` / `scheduler` 提为常量，`runOnce` 同步改用常量、字面量不变）。调 `getOrCreate` 取回 → 消息为空则**不写库**（没跑过的 Agent 不会凭空多出一条空会话）→ 否则 `save(Session.create(同 id, 同三元组))`。`JpaSessionService.save` 的更新路径只写 `messages_json` + `last_active_at`，会话标识 / `created_at` / 归档态原样保留；两张审计表一行不动。
+- `AgentLifecycleService.resetScheduleSession(String name)`：转发，便于 watcher 只依赖 lifecycle（会话三元组与 id 拼接仍收在 core 内部，H4 ④ 不破）。
+- `WorkspaceWatcher.processDueEdits()`：登记成功后单独一段 `try` 调重置，**失败只 WARN**（「已变更并重新登记，但重置调度会话失败」）——不让清历史失败被误报成「重新登记失败」。
+- 这是 `Session`「只追加」不变量的**唯一一处有意例外**，已在 `AgentScheduler` 的 javadoc 里写明理由与边界。
+
+### 8.3 测试与门禁
+
+- `AgentSchedulerTest` +2：`resetScheduleSession_clearsAccumulatedHistory_keepsIdentity`（写回同 id / 同三元组 / 空消息）、`resetScheduleSession_withoutHistory_doesNotWriteAnything`（零 `save`）；31 → **33**。
+- `WorkspaceWatcherTest` +2：`editingAgentMarkdownResetsSchedulerSession`（编辑后 `resetScheduleSession("weather")` 被调用）、`startupScanDoesNotResetSchedulerSession`（启动扫描 `never()`）；6 → **8**。
+- `AgentLifecycleServiceTest` +1：`update_doesNotResetScheduleSession`（API 保存不重置）；12 → **13**。
+- 文档：`spec.md` 的 2026-10-22 修订注补第二处；`specs/014-demo-agents/manual-test-guide.md` Step 5.1 判据改为含「已重置调度会话」的日志行、新增 Step 5.2（换城市 + 重置的判据）与坑表第 17 行；`CLAUDE.md` 第 30 节交付后扩展段补记。
+- **首次全量跑抓红一处**：`AgentSchedulerTest.runOnce_doesNotLogOrPersistAnythingItself`（读源文件断言不含审计表名）命中我新写的 javadoc 里的 `llm_calls` / `tool_invocations` 字样。按反作弊口径改**注释措辞**（「两张审计表」），不动断言。

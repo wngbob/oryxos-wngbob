@@ -1,6 +1,6 @@
 # Quick Start
 
-> ✅ **The runtime kernel is up**: all five core capabilities are delivered and the commands below are verified on real builds. Acceptance demos and cross-section integration checks are progressing per the [roadmap](/en/guide/roadmap).
+> ✅ **The runtime kernel is up**: all five core capabilities are delivered, the three acceptance demos (daily weather / tech digest / GitHub digest) are up, and the commands below are verified on real builds. See the [roadmap](/en/guide/roadmap).
 
 ## Requirements
 

@@ -120,7 +120,7 @@ OryxOS 是企业私有部署的 **Agent 操作系统**：装在企业自己的 K
 
 ## 快速开始
 
-> 运行时内核（第 16~26 节）已交付并全绿，以下命令**都已在真实构建上跑过**。全量验收 Demo 与跨节串联验收尚在进行中。
+> 运行时内核（第 16~30 节）与三个验收 Demo（第 31 节）已交付并全绿，以下命令**都已在真实构建上跑过**。三个 Demo 的连续两天自动推送留作人工复核，见 [`specs/014-demo-agents/manual-test-guide.md`](specs/014-demo-agents/manual-test-guide.md)。
 
 ```bash
 # 环境要求：JDK 21+，Maven 3.8+（仓库自带 ./mvnw）
@@ -163,6 +163,45 @@ cp -a examples/skills/report-format   .oryxos/skills/
 cp -a examples/agents/daily-reconcile .oryxos/agents/
 java -jar oryxos-boot/target/oryxos.jar profile list   # daily-reconcile 应出现在列表里
 ```
+
+### 三个验收 Demo（第 31 节）
+
+[`examples/agents/`](examples/agents/) 下有三个可直接复制的业务 Agent，刻意覆盖 Agent 目录的三种丰富度——**光杆 `AGENT.md` → 带 Skill → 带脚本**：
+
+| Demo | 目录 | 到点时间 | 目录形态与演示重点 |
+|------|------|----------|--------------------|
+| 每日天气 | [`weather-daily/`](examples/agents/weather-daily/) | 08:00 | **光杆 `AGENT.md`**：`http_get` 两步（open-meteo Geocoding 按城市名取经纬度 → Forecast 取天气）+ `notify`；城市名只写一次；也可走第 30 节 API 创建 |
+| 每日科技日报 | [`daily-tech-digest/`](examples/agents/daily-tech-digest/) | 09:00 | **+ Skill**：`http_get` 拉新闻、`read_file` 按需读 `digest-format` 组稿规范、长期记忆里的偏好影响排序 |
+| 每日 GitHub 日报 | [`github-daily/`](examples/agents/github-daily/) | 09:30 | **+ 脚本**：`shell` 跑 `python3 scripts/github_trending.py`，**只有脚本产出的 JSON 进上下文、源码不进**；记忆偏好影响 AI 段排序 |
+
+复制进工作区（`-a` 保留软连接，Skill 绑定不许用 `-r` 跟随成实体文件）：
+
+```bash
+cp -a examples/skills/digest-format     .oryxos/skills/
+cp -a examples/agents/weather-daily     .oryxos/agents/
+cp -a examples/agents/daily-tech-digest .oryxos/agents/
+cp -a examples/agents/github-daily      .oryxos/agents/
+
+# 1) 凭证先进当前终端的环境：库里只存 ${TEAM_WEBHOOK_URL} 占位符，serve 在「发送时」解析，
+#    所以必须在本终端 export，且发生在启动 serve 之前（serve 已启动的，改完要重启）
+export TEAM_WEBHOOK_URL=https://...            # 本地接收端用 http://127.0.0.1:9099/hook
+
+# 2) 注册全局通知渠道（不属于任何 Agent 目录）；--type 按对端选：
+#    webhook（通用接收端）/ feishu（飞书）/ lark / wecom（企业微信）
+java -jar oryxos-boot/target/oryxos.jar notify-channel add team --type feishu --url-env TEAM_WEBHOOK_URL
+```
+
+> 飞书群机器人用 `--type webhook` 会回 `HTTP 200` + 业务码 `19002`，`notify` 如实报失败但群里没消息——按上表选对 `--type`。渠道存错类型时先 `notify-channel remove team` 再重加。
+
+天气 Demo 也可以完全走 API 创建（第 30 节）——`POST /api/v1/agents` 建脚手架，再用 `PUT /api/v1/agents/weather-daily` 覆写 `AGENT.md`，即时生效、不用重启：
+
+```bash
+curl -X POST localhost:8080/api/v1/agents -H 'Content-Type: application/json' \
+     -d '{"name":"weather-daily","description":"每天早上查北京天气并推送穿搭建议"}'
+# 把 examples/agents/weather-daily/AGENT.md 的内容包成 {"agentMarkdown": "..."} PUT 上去
+```
+
+跑之前确认白名单覆盖它们依赖的外部资源（`oryxos-boot/src/main/resources/application.yaml`）：`api.open-meteo.com`、`hn.algolia.com`、`api.github.com`、`python3`，以及 webhook 的对端域名。三份 `AGENT.md` 的 frontmatter 形状、cron、Skill 软连接与白名单取值由 `DemoAgentsSourceTest`（5 条）机检；真模型端到端与连续两天自动推送见人工向导。
 
 REST 端点共 **27 个**，全部落在 `/api/v1` 下，统一响应信封 `{code, message, data, timestamp}`：
 
@@ -237,7 +276,7 @@ schedules: [{ cron: "0 0 8 * * *", message: "查一下今天天气并生成穿�
 
 ## 项目状态
 
-**当前阶段：运行时内核已跑通。** 五大核心能力（第 16~26 节）全部交付，动态 Agent 管理（第 30 节）接上，`mvn clean verify` 全绿（**723** 条测试）；目前在做跨节串联验收与三个验收 Demo。
+**当前阶段：运行时内核已跑通，三个验收 Demo 已跑通。** 五大核心能力（第 16~26 节）全部交付，动态 Agent 管理（第 30 节）接上，三个每天到点自己跑的 Agent（第 31 节）落地，`mvn clean verify` 全绿（**738** 条测试）。剩余人工项：三个 Demo 连续两天自动推送、干净机器 30 分钟部署、`v0.1.0` tag（见 [人工验收向导](specs/014-demo-agents/manual-test-guide.md)）。
 
 - [x] 业界调研 / 需求文档 / 技术方案 / AI 编程指南
 - [x] Spec-Kit 开发工作流搭建
@@ -253,17 +292,17 @@ schedules: [{ cron: "0 0 8 * * *", message: "查一下今天天气并生成穿�
 - [x] 能力五：Web Service（27 个 REST 端点）+ 管理台（6 页，Agent 详情与定时任务页可写）
 - [x] 跨节串联验收（第 27 节）
 - [x] 定时任务子系统（状态与历史落 SQLite、四个管理端点、跨重启恢复、多 Agent 隔离）
-- [ ] 三个验收 Demo：每日天气 / 每日科技日报 / 每日 GitHub 日报
+- [x] 三个验收 Demo：每日天气 / 每日科技日报 / 每日 GitHub 日报（连续两天自动推送与真群推送留作人工复核）
 - [ ] OryxOS 1.0 发布 + 项目主页
 
 ## 路线图
 
 我们的开发理念是：**慢就是快，克制且聚焦**。先把单机的运行时内核做扎实，再逐步生长出分布式能力。
 
-- **阶段一（当前）单机运行时内核**：五大核心能力已跑通——配置即 Agent、多 Agent 并存、REST API 接入、对接 MCP、管理台；人推主干（第 27 节）与钟推 / 重启恢复 / 多 Agent 隔离（第 28 节）的全流程串联均已用集成测试固定，剩余工作是跑通三个验收 Demo（第 31 节）
+- **阶段一（当前）单机运行时内核**：五大核心能力已跑通——配置即 Agent、动态管理 Agent、多 Agent 并存、REST API 接入、对接 MCP、管理台；人推主干（第 27 节）、钟推 / 重启恢复 / 多 Agent 隔离（第 28 节）与三个业务 Agent（第 31 节：光杆 `AGENT.md` / 带 Skill / 带脚本）均已跑通
 - **阶段二（规划）底座分布式**：节点无状态化、状态外置、多副本部署，支撑更大规模与高可用
 - **阶段三（愿景）跨节点 Agent 协作**：引入 Agent 通信底座，对接 A2A，跨节点发现、委托、可靠异步协同
-- **横向能力**（伴随各阶段补齐）：多租户、SSO、完整审计、工具策略、可观测、**可写**的管理台（当前交付的第一版管理台是只读的，渠道管理等写入口留到扩展阶段）
+- **横向能力**（伴随各阶段补齐）：多租户、SSO、完整审计、工具策略、可观测、管理台写入口（当前 Agent 详情与定时任务页可写，渠道管理等其余写入口留到扩展阶段）
 
 **长期目标：走进 Apache 基金会，成为 Apache 顶级项目。**
 

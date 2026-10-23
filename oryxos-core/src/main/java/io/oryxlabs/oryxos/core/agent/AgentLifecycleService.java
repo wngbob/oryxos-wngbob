@@ -183,6 +183,21 @@ public class AgentLifecycleService {
   }
 
   /**
+   * 清空某个 Agent 的调度会话历史（2026-10-22：直接编辑 {@code AGENT.md} 后由实时监听器触发）。
+   *
+   * <p><b>只由「直接编辑」这一条路径调用</b>：启动扫描与 {@link #create} / {@link #update} / {@link #saveFiles}
+   * 都不调它——重启不丢上下文，走 API 保存时调用方已经拿到了校验结果，没有「模型照着旧上下文重放」这个坑。
+   *
+   * <p>实现落在 {@link AgentScheduler}：三元组 {@code (scheduler, scheduler, <name>)} 只有它知道，会话标识的拼接也只在
+   * session 包内（H4 不变量 ④）。
+   *
+   * @param name Agent 名
+   */
+  public void resetScheduleSession(String name) {
+    agentScheduler.resetScheduleSession(name);
+  }
+
+  /**
    * 注销一个 Agent 的运行时痕迹：先停定时，再移出索引（目录本身不动）。
    *
    * <p><b>先停定时</b>：留着句柄就会有一个「索引里已经没有、却还在按时跑」的 Agent——它的消息进不来，但它会继续写审计、继续推消息。

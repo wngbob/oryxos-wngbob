@@ -170,6 +170,20 @@ class AgentLifecycleServiceTest {
   }
 
   @Test
+  @DisplayName("AgentLifecycleServiceTest：API 保存不重置调度会话历史（2026-10-22 边界：只有直接编辑才重置）")
+  void update_doesNotResetScheduleSession() {
+    Profile old = profile("weather", List.of());
+    String markdown = "---\nprovider:\n  name: mock\n---\n正文";
+    when(registry.find("weather")).thenReturn(Optional.of(old));
+    when(profileLoader.parse(markdown, "weather"))
+        .thenReturn(profile("weather", List.of(), "mock", "mock"));
+
+    service.update("weather", markdown);
+
+    verify(scheduler, never()).resetScheduleSession(any());
+  }
+
+  @Test
   @DisplayName("AgentLifecycleServiceTest：update 引用未知厂商被拒，且一个字节都不写")
   void update_rejectsUnknownProviderBeforeWritingAnything() {
     Profile old = profile("weather", List.of());

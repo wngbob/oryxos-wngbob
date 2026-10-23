@@ -231,5 +231,5 @@
 - 带脚本的复杂 Agent 仍走手工丢目录；JSON create 只做模板脚手架。
 - 一次 ReAct 循环整体跑在一条虚拟线程上，`ThreadLocal` 执行上下文在同步模型下成立（无 Reactor / 异步）。
 - 生成用模型由 `oryxos.author.*` 配置；未配置 model 时端点返回 503 而不是猜测。
-- `WatchService` 在 macOS 上不监听子目录内文件的改动（课件 §5.2.3 已知），故 AGENT.md 的编辑走显式 update 重注册；监听器主要负责目录级增删。
+- `WatchService` 在 macOS 上不监听子目录内文件的改动（课件 §5.2.3 已知），故 AGENT.md 的编辑走显式 update 重注册；监听器主要负责目录级增删。**2026-10-22 修订注（已推翻）**：该边界来自「只监听 `agents/` 一层」的实现选择，不是 `WatchService` 的固有限制。用户实跑要求直接编辑生效，`WorkspaceWatcher` 现为**每个 Agent 子目录单独注册 key**，`AGENT.md` 的 CREATE / MODIFY 在 300ms 静默期后走同一条 `register`（先取消旧定时句柄）；编辑器的「写临时文件 → 改名覆盖」产生的 DELETE 事件被忽略、保留旧运行态，坏内容保存失败也只告警不注销。PUT / 管理台保存仍是推荐路径（同步返回校验结果），但直接编辑不再需要重启。**同日第二处修订**：编辑被检测并重新登记成功后，还会**清空该 Agent 的调度会话历史**（`scheduler:scheduler:<name>`），否则模型会照着旧上下文里的工具参数原样重放、改了正文也看不到效果（用户实跑：把城市改成成都仍推北京）；启动扫描与 `PUT` / `saveFiles` **不清**历史。
 - 前序节交付物的方法名按本仓实际（`find` / `chat` / `ProfileLoader`），不按课件示意改名。

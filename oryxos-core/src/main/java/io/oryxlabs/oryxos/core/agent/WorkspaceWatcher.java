@@ -30,6 +30,12 @@ import org.slf4j.LoggerFactory;
  * 会永久漏注册——「文件明明在，列表里就是没有」。故失败的目录进有界重试队列（{@link #MAX_ATTEMPTS} × {@link
  * #RETRY_INTERVAL_MILLIS}），由主循环的 {@code poll} 驱动，<b>不为此另开线程或定时器</b>。
  *
+ * <p><b>直接编辑 {@code AGENT.md} 也生效（2026-10-22 修订）</b>：{@code agents/} 的 key 只收直接子项的事件，
+ * 内层文件的写入打在子目录自己的 key 上。故每个 Agent 子目录也单独注册一份 key：{@code AGENT.md} 写完、 静默 {@link
+ * #EDIT_SETTLE_MILLIS} 毫秒后走同一条 {@code register} 重登记（先取消旧定时句柄，不会新旧并存），随后<strong>清空该 Agent
+ * 的调度会话历史</strong>——调度会话是同一个三元组长期累积的上下文，不清掉模型会照着旧上下文重放，新正文形同虚设。 编辑器「写临时文件 →
+ * 改名覆盖」产生的删除事件不处理，保留旧运行态等随后的写事件。
+ *
  * <p><b>已知边界</b>：重试耗尽后放弃的那个目录，要等下一次重启扫描或新的目录事件才会再试——不会自己恢复。
  */
 public class WorkspaceWatcher {
@@ -50,6 +56,12 @@ public class WorkspaceWatcher {
 
   private static final String AGENT_FILE = "AGENT.md";
 
+  /** 编辑保存的静默期：编辑器一次保存常连发多个事件，等最后一个落定再登记。 */
+  private static final long EDIT_SETTLE_MILLIS = 300;
+
+  /** 持续写入（大文件 / 慢速保存）时的最长等待，避免登记被无限推迟。 */
+  private static final long EDIT_SETTLE_MAX_MILLIS = 2_000;
+
   /** 生命周期编排：目录事件的唯一落点（与 API 创建走同一个 {@code register}）。 */
   private final AgentLifecycleService lifecycleService;
 
@@ -58,6 +70,17 @@ public class WorkspaceWatcher {
 
   /** 等重试的目录：按目录名去重，值里记已试次数与下次到点时间。只在工作线程里读写。 */
   private final Map<String, PendingRetry> pending = new LinkedHashMap<>();
+
+  /**
+   * 每个 Agent 子目录的 watch key（目录名 → key）。
+   *
+   * <p><b>为什么必须逐个子目录注册</b>：{@code agents/} 这一层的 key 只收得到「直接子项」的事件， {@code agents/<name>/AGENT.md}
+   * 的写入打在子目录自己的 key 上——不注册它，直接编辑文件永远不会触发重登记。
+   */
+  private final Map<String, WatchKey> agentDirKeys = new LinkedHashMap<>();
+
+  /** 收到 {@code AGENT.md} 写入、等待静默期后重新登记的 Agent：按目录名去重。只在工作线程里读写。 */
+  private final Map<String, PendingRegister> pendingRegisters = new LinkedHashMap<>();
 
   private WatchService watchService;
   private Thread thread;
@@ -92,7 +115,6 @@ public class WorkspaceWatcher {
     }
     try {
       Files.createDirectories(agentsDir);
-      scanExisting();
       WatchService service = FileSystems.getDefault().newWatchService();
       agentsDir.register(
           service,
@@ -101,6 +123,10 @@ public class WorkspaceWatcher {
           StandardWatchEventKinds.ENTRY_DELETE);
       this.watchService = service;
       this.pending.clear();
+      this.pendingRegisters.clear();
+      this.agentDirKeys.clear();
+      // 扫描放在 WatchService 就位之后：每个已存在的 Agent 子目录也要挂 key，否则改它的 AGENT.md 看不见
+      scanExisting(service);
       Thread worker = new Thread(() -> loop(service), THREAD_NAME);
       // daemon：它不承担任何持久化职责，进程该退出时不该被它拖住
       worker.setDaemon(true);
@@ -130,12 +156,15 @@ public class WorkspaceWatcher {
       thread.interrupt();
       thread = null;
     }
+    // 关闭 WatchService 已让所有 key 失效；清表只是不给下一次 start() 留旧引用
+    agentDirKeys.clear();
+    pendingRegisters.clear();
   }
 
   /** 启动扫描：{@code agents/} 下每个直接子目录都试登记一次，坏目录只告警。 */
-  private void scanExisting() {
+  private void scanExisting(WatchService service) {
     try (Stream<Path> children = Files.list(agentsDir)) {
-      children.filter(Files::isDirectory).sorted().forEach(this::registerQuietly);
+      children.filter(Files::isDirectory).sorted().forEach(dir -> registerQuietly(service, dir));
     } catch (IOException e) {
       // 扫不动不是致命错：监听线程起来后，目录事件照样能把后来的目录登记上
       log.warn("启动扫描 Agent 目录失败：{}", sanitize(e.getMessage()));
@@ -143,8 +172,10 @@ public class WorkspaceWatcher {
   }
 
   /** 单目录登记：失败进重试队列；启动扫描与事件处理共用。 */
-  private void registerQuietly(Path dir) {
+  private void registerQuietly(WatchService service, Path dir) {
     String name = nameOf(dir);
+    // 先挂上子目录 key（目录已存在即可挂），这样即使 AGENT.md 还没写完，稍后的写入也能看见
+    watchAgentDir(service, dir);
     try {
       lifecycleService.register(dir);
       log.info("已登记 Agent：{}", sanitize(name));
@@ -167,20 +198,25 @@ public class WorkspaceWatcher {
       }
       if (key != null) {
         for (WatchEvent<?> event : key.pollEvents()) {
-          handleEvent(event);
+          handleEvent(service, key, event);
         }
         if (!key.reset()) {
-          // 被监听的目录本身没了：没有可监听的锚点，退出比空转好
-          log.warn("Agent 目录已不可监听，监听线程退出：{}", sanitize(agentsDir.toString()));
-          return;
+          if (agentsDir.equals(key.watchable())) {
+            // 被监听的根目录本身没了：没有可监听的锚点，退出比空转好
+            log.warn("Agent 目录已不可监听，监听线程退出：{}", sanitize(agentsDir.toString()));
+            return;
+          }
+          // 子目录 key 失效（目录被删 / 被我们取消）：只丢这个 key，主监听继续
+          forgetCanceledKey(key);
         }
       }
-      retryDue();
+      retryDue(service);
+      processDueEdits();
     }
   }
 
   /** 单个事件的处理：任何异常只告警，线程继续（一个坏目录不该让整个监听停摆）。 */
-  private void handleEvent(WatchEvent<?> event) {
+  private void handleEvent(WatchService service, WatchKey key, WatchEvent<?> event) {
     if (event.kind() == StandardWatchEventKinds.OVERFLOW) {
       return;
     }
@@ -188,18 +224,135 @@ public class WorkspaceWatcher {
     if (!(context instanceof Path relative)) {
       return;
     }
+    Object watchable = key.watchable();
+    if (!agentsDir.equals(watchable)) {
+      if (watchable instanceof Path dir) {
+        handleAgentDirEvent(dir, relative, event.kind());
+      }
+      return;
+    }
     Path child = agentsDir.resolve(relative);
     String name = nameOf(child);
     try {
       if (event.kind() == StandardWatchEventKinds.ENTRY_DELETE) {
         pending.remove(name);
+        pendingRegisters.remove(name);
+        cancelAgentDirKey(name);
         lifecycleService.unregister(name);
         log.info("Agent 目录已移除，已注销：{}", sanitize(name));
       } else if (Files.isDirectory(child)) {
-        registerQuietly(child);
+        registerQuietly(service, child);
       }
     } catch (RuntimeException e) {
       log.warn("处理 Agent 目录事件失败：{}（{}）", sanitize(name), sanitize(e.getMessage()));
+    }
+  }
+
+  /**
+   * 子目录内的事件：只有 {@code AGENT.md} 的写入才意味着定义变了（改 cron、改工具、改正文）。
+   *
+   * <p>{@code ENTRY_DELETE} 刻意不处理：编辑器（vim / VS Code / IDEA）常「写临时文件 → 改名覆盖」，
+   * 过程中会先看到一次删除。此时保留旧运行态，等随后的 CREATE / MODIFY 再走同一条 {@code register}。
+   */
+  private void handleAgentDirEvent(Path dir, Path relative, WatchEvent.Kind<?> kind) {
+    if (!AGENT_FILE.equals(relative.toString())) {
+      return;
+    }
+    if (kind == StandardWatchEventKinds.ENTRY_DELETE) {
+      return;
+    }
+    if (!Files.isDirectory(dir)) {
+      return;
+    }
+    scheduleReregister(dir);
+  }
+
+  /** 安排一次（去抖后的）重新登记：一次保存的多个事件只算一次，持续写入最多推迟 {@link #EDIT_SETTLE_MAX_MILLIS}。 */
+  private void scheduleReregister(Path dir) {
+    String name = nameOf(dir);
+    long now = System.nanoTime();
+    PendingRegister entry = pendingRegisters.get(name);
+    if (entry == null) {
+      entry = new PendingRegister(dir, now);
+      pendingRegisters.put(name, entry);
+    }
+    long settled = now + TimeUnit.MILLISECONDS.toNanos(EDIT_SETTLE_MILLIS);
+    long cap = entry.firstEventAtNanos + TimeUnit.MILLISECONDS.toNanos(EDIT_SETTLE_MAX_MILLIS);
+    entry.dueAtNanos = Math.min(settled, cap);
+  }
+
+  /**
+   * 静默期到点的重新登记：失败只告警并保留旧运行态（半写 / 语法错的编辑不该把在跑的 Agent 弄下线）。
+   *
+   * <p><b>登记成功后重置调度会话历史</b>（2026-10-22，用户裁决「编辑时自动重置」）：调度会话是同一个三元组长期累积的上下文， 不清掉的话模型会照着旧上下文里的城市 / URL
+   * / 工具调用原样重放，新正文形同虚设。重置失败只 WARN——登记已经成功， 不该因为清历史没写成而让调用方以为这次编辑没生效。
+   */
+  private void processDueEdits() {
+    if (pendingRegisters.isEmpty()) {
+      return;
+    }
+    long now = System.nanoTime();
+    Iterator<Map.Entry<String, PendingRegister>> iterator = pendingRegisters.entrySet().iterator();
+    while (iterator.hasNext()) {
+      Map.Entry<String, PendingRegister> entry = iterator.next();
+      if (now < entry.getValue().dueAtNanos) {
+        continue;
+      }
+      try {
+        lifecycleService.register(entry.getValue().dir);
+        iterator.remove();
+      } catch (RuntimeException e) {
+        iterator.remove();
+        log.warn(
+            "AGENT.md 变更后重新登记失败，保留原运行态：{}（{}）", sanitize(entry.getKey()), sanitize(e.getMessage()));
+        continue;
+      }
+      try {
+        lifecycleService.resetScheduleSession(entry.getKey());
+        log.info("AGENT.md 已变更，已重新登记并重置调度会话：{}", sanitize(entry.getKey()));
+      } catch (RuntimeException e) {
+        log.warn(
+            "AGENT.md 已变更并重新登记，但重置调度会话失败：{}（{}）",
+            sanitize(entry.getKey()),
+            sanitize(e.getMessage()));
+      }
+    }
+  }
+
+  /** 给一个 Agent 子目录挂 key（幂等）；目录已不在或监听器已关闭时只记一条 DEBUG。 */
+  private void watchAgentDir(WatchService service, Path dir) {
+    String name = nameOf(dir);
+    if (agentDirKeys.containsKey(name)) {
+      return;
+    }
+    if (!Files.isDirectory(dir)) {
+      return;
+    }
+    try {
+      agentDirKeys.put(
+          name,
+          dir.register(
+              service,
+              StandardWatchEventKinds.ENTRY_CREATE,
+              StandardWatchEventKinds.ENTRY_MODIFY,
+              StandardWatchEventKinds.ENTRY_DELETE));
+    } catch (IOException | ClosedWatchServiceException e) {
+      log.debug("无法监听 Agent 子目录（不影响目录级增删）：{}（{}）", sanitize(name), sanitize(e.getMessage()));
+    }
+  }
+
+  /** 取消并忘掉一个 Agent 子目录的 key（目录已删 / 已归档）。 */
+  private void cancelAgentDirKey(String name) {
+    WatchKey key = agentDirKeys.remove(name);
+    if (key != null) {
+      key.cancel();
+    }
+  }
+
+  /** 子目录 key 自行失效后从表里清掉，避免下次误以为还挂着。 */
+  private void forgetCanceledKey(WatchKey key) {
+    if (key.watchable() instanceof Path path) {
+      agentDirKeys.remove(nameOf(path), key);
     }
   }
 
@@ -222,7 +375,7 @@ public class WorkspaceWatcher {
   }
 
   /** 处理到期的重试：成功即移除，耗尽则 WARN 后放弃。 */
-  private void retryDue() {
+  private void retryDue(WatchService service) {
     if (pending.isEmpty()) {
       return;
     }
@@ -236,6 +389,7 @@ public class WorkspaceWatcher {
       }
       try {
         lifecycleService.register(retry.dir);
+        watchAgentDir(service, retry.dir);
         iterator.remove();
         log.info("重试成功，已登记 Agent：{}", sanitize(entry.getKey()));
       } catch (RuntimeException e) {
@@ -283,6 +437,20 @@ public class WorkspaceWatcher {
 
     private PendingRetry(Path dir) {
       this.dir = dir;
+    }
+  }
+
+  /** 一个等待重新登记的 Agent：记首次事件时间（用于封顶）与下次执行时间。 */
+  private static final class PendingRegister {
+
+    private final Path dir;
+    private final long firstEventAtNanos;
+    private long dueAtNanos;
+
+    private PendingRegister(Path dir, long firstEventAtNanos) {
+      this.dir = dir;
+      this.firstEventAtNanos = firstEventAtNanos;
+      this.dueAtNanos = firstEventAtNanos;
     }
   }
 }
