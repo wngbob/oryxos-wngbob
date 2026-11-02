@@ -39,3 +39,4 @@ scripts/hooks/local-env.sh
 bin/config.yaml
 bin/*.pid
 bin/*.log
+docs/oryxos-wngbob.code-workspace
